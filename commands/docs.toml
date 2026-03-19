@@ -1,1 +1,4 @@
+name = "docs"
 description = "Documentation management — search, health, stale, gaps, validate, fix"
+type = "prompt"
+prompt = "commands/docs.md"

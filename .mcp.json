@@ -1,8 +1,11 @@
 {
   "mcpServers": {
     "local-rag": {
-      "command": "node",
-      "args": ["${HOME}/.claude/plugins/data/root/node_modules/mcp-local-rag/dist/index.js"],
+      "command": "bash",
+      "args": [
+        "-c",
+        "if [ -f \"${HOME}/.gemini/extensions/root/node_modules/mcp-local-rag/dist/index.js\" ]; then exec node \"${HOME}/.gemini/extensions/root/node_modules/mcp-local-rag/dist/index.js\"; else exec node \"${HOME}/.claude/plugins/data/root/node_modules/mcp-local-rag/dist/index.js\"; fi"
+      ],
       "env": {
         "DB_PATH": ".claude/rag-db",
         "CACHE_DIR": "${HOME}/.cache/mcp-local-rag/models"
