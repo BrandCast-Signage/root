@@ -2,7 +2,7 @@
   "mcpServers": {
     "local-rag": {
       "command": "node",
-      "args": ["${HOME}/.local/lib/root-rag/node_modules/mcp-local-rag/dist/index.js"],
+      "args": ["${CLAUDE_PLUGIN_DATA}/node_modules/mcp-local-rag/dist/index.js"],
       "env": {
         "DB_PATH": ".claude/rag-db",
         "CACHE_DIR": "${HOME}/.cache/mcp-local-rag/models"

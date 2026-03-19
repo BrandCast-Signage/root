@@ -1,117 +1,56 @@
 #!/bin/bash
-# root init — scaffold Root framework config in a project
+# root init — scaffold Root framework config and install dependencies
 #
-# Usage: root init [project-dir] [--force]
-#
-# Installs:
-# - root.config.json (project config)
-# - .claude/context/workflow.md (tier workflow reference)
-# - <plansDir>/TEMPLATE.md (implementation plan template)
-# - .claude/agents/ (team + specialist agent templates)
-# - RAG MCP server (if not already installed)
+# Usage: root init [project-dir]
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TARGET="${1:-.}"
-FORCE=false
+TARGET="$(cd "$TARGET" 2>/dev/null && pwd)"
 
-# Parse flags
-for arg in "$@"; do
-  case "$arg" in
-    --force) FORCE=true ;;
-  esac
-done
-
-# Resolve target to absolute path
-TARGET="$(cd "$TARGET" 2>/dev/null && pwd)" || { echo "ERROR: Directory '$1' not found"; exit 1; }
+# Plugin data directory — persistent across plugin updates
+PLUGIN_DATA="${HOME}/.claude/plugins/data/root"
 
 echo "=== Root Framework Init ==="
-echo "Project: $TARGET"
 echo ""
 
-# --- 1. Config file ---
-CONFIG="$TARGET/root.config.json"
-if [[ -f "$CONFIG" && "$FORCE" != "true" ]]; then
-  echo "✓ root.config.json already exists (use --force to overwrite)"
-else
-  cp "$PLUGIN_ROOT/root.config.example.json" "$CONFIG"
-  echo "✓ Created root.config.json — edit this to customize mappings"
-fi
+# --- Install RAG MCP server ---
+echo "Installing RAG MCP server..."
+mkdir -p "$PLUGIN_DATA"
+cd "$PLUGIN_DATA"
+npm init -y --silent 2>/dev/null
+npm install mcp-local-rag
+echo "✓ RAG MCP server installed"
+echo ""
 
-# --- 2. Workflow reference ---
+# --- Project config ---
+cd "$TARGET"
+
+cp -n "$PLUGIN_ROOT/root.config.example.json" "$TARGET/root.config.json" 2>/dev/null && echo "✓ Created root.config.json" || echo "✓ root.config.json already exists"
+
 mkdir -p "$TARGET/.claude/context"
-if [[ -f "$TARGET/.claude/context/workflow.md" && "$FORCE" != "true" ]]; then
-  echo "✓ .claude/context/workflow.md already exists"
-else
-  cp "$PLUGIN_ROOT/templates/context/workflow.md" "$TARGET/.claude/context/workflow.md"
-  echo "✓ Installed workflow.md"
-fi
+cp -n "$PLUGIN_ROOT/templates/context/workflow.md" "$TARGET/.claude/context/workflow.md" 2>/dev/null && echo "✓ Installed workflow.md" || echo "✓ workflow.md already exists"
 
-# --- 3. Implementation Plan template ---
-# Read plansDir from config if it exists, default to docs/plans
-PLANS_DIR="docs/plans"
-if [[ -f "$CONFIG" ]]; then
-  PLANS_DIR=$(python3 -c "import json; print(json.load(open('$CONFIG'))['project'].get('plansDir', 'docs/plans'))" 2>/dev/null || echo "docs/plans")
-fi
+# Read plansDir from config
+PLANS_DIR=$(python3 -c "import json; print(json.load(open('$TARGET/root.config.json'))['project'].get('plansDir', 'docs/plans'))" 2>/dev/null || echo "docs/plans")
 mkdir -p "$TARGET/$PLANS_DIR"
-if [[ -f "$TARGET/$PLANS_DIR/TEMPLATE.md" && "$FORCE" != "true" ]]; then
-  echo "✓ $PLANS_DIR/TEMPLATE.md already exists"
-else
-  cp "$PLUGIN_ROOT/templates/plans/TEMPLATE.md" "$TARGET/$PLANS_DIR/TEMPLATE.md"
-  echo "✓ Installed Implementation Plan template at $PLANS_DIR/TEMPLATE.md"
-fi
+cp -n "$PLUGIN_ROOT/templates/plans/TEMPLATE.md" "$TARGET/$PLANS_DIR/TEMPLATE.md" 2>/dev/null && echo "✓ Installed plan template" || echo "✓ Plan template already exists"
 
-# --- 4. Agent templates ---
 mkdir -p "$TARGET/.claude/agents"
-INSTALLED=0
-SKIPPED=0
 for agent in "$PLUGIN_ROOT/agents/"*.md; do
-  name="$(basename "$agent")"
-  if [[ -f "$TARGET/.claude/agents/$name" && "$FORCE" != "true" ]]; then
-    SKIPPED=$((SKIPPED + 1))
-  else
-    cp "$agent" "$TARGET/.claude/agents/$name"
-    INSTALLED=$((INSTALLED + 1))
-  fi
+  cp -n "$agent" "$TARGET/.claude/agents/$(basename "$agent")" 2>/dev/null
 done
-echo "✓ Agents: $INSTALLED installed, $SKIPPED skipped (already exist)"
+echo "✓ Agent templates installed"
 
-# --- 5. RAG MCP server ---
-RAG_DIR="${HOME}/.local/lib/root-rag"
-if [[ -d "$RAG_DIR/node_modules/mcp-local-rag" ]]; then
-  echo "✓ RAG MCP server already installed at $RAG_DIR"
-else
-  echo "Installing RAG MCP server (mcp-local-rag)..."
-  mkdir -p "$RAG_DIR"
-  cd "$RAG_DIR"
-  npm init -y --silent 2>/dev/null
-  npm install mcp-local-rag --silent 2>/dev/null
-  if [[ $? -eq 0 ]]; then
-    echo "✓ RAG MCP server installed at $RAG_DIR"
-  else
-    echo "⚠ RAG install failed — native deps may need manual setup"
-    echo "  Try: cd $RAG_DIR && npm install mcp-local-rag"
-  fi
-  cd "$TARGET"
-fi
-
-# --- 6. Create RAG database directory ---
 mkdir -p "$TARGET/.claude/rag-db"
-echo "✓ RAG database directory at .claude/rag-db/"
-
-# --- 7. Generate doc index ---
-if [[ -x "$PLUGIN_ROOT/hooks/scripts/build-doc-index.sh" ]]; then
-  echo "Generating doc index..."
-  "$PLUGIN_ROOT/hooks/scripts/build-doc-index.sh" 2>/dev/null && echo "✓ Doc index generated" || echo "⚠ Doc index generation skipped"
-fi
 
 echo ""
-echo "=== Root Init Complete ==="
+echo "=== Done ==="
 echo ""
-echo "Next steps:"
-echo "  1. Edit root.config.json to match your project structure"
+echo "Next:"
+echo "  1. Edit root.config.json for your project"
 echo "  2. Customize .claude/agents/specialist-*.md for your stack"
 echo "  3. Restart Claude Code to load the RAG MCP server"
-echo "  4. Run: /root <task> to start your first session"
+echo "  4. Run /root:root <task> to start"
