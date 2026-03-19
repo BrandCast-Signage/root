@@ -70,7 +70,7 @@ Rules:
 
 ### Step 4: Load relevant docs
 
-1. Use the `mcp__local-rag__query_documents` tool to search for relevant documentation:
+1. Use the `mcp__plugin_root_local-rag__query_documents` tool to search for relevant documentation:
    - Formulate a query from the task description + issue title/body
    - Use `limit: 10` to get a broad set of results
    - Filter results: use chunks with score < 0.3 directly, consider 0.3-0.5 if relevant, skip > 0.5

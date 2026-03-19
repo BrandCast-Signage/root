@@ -20,14 +20,19 @@ echo ""
 mkdir -p "$TARGET/.claude/context"
 cp -n "$PLUGIN_ROOT/templates/context/workflow.md" "$TARGET/.claude/context/workflow.md" 2>/dev/null && echo "✓ Installed workflow.md" || echo "✓ workflow.md already exists"
 
-# Read plansDir from config if it exists
+# Read plansDir and prdsDir from config if it exists
 if [[ -f "$TARGET/root.config.json" ]]; then
   PLANS_DIR=$(python3 -c "import json; print(json.load(open('$TARGET/root.config.json'))['project'].get('plansDir', 'docs/plans'))" 2>/dev/null || echo "docs/plans")
+  PRDS_DIR=$(python3 -c "import json; print(json.load(open('$TARGET/root.config.json'))['project'].get('prdsDir', 'docs/prds'))" 2>/dev/null || echo "docs/prds")
 else
   PLANS_DIR="docs/plans"
+  PRDS_DIR="docs/prds"
 fi
 mkdir -p "$TARGET/$PLANS_DIR"
 cp -n "$PLUGIN_ROOT/templates/plans/TEMPLATE.md" "$TARGET/$PLANS_DIR/TEMPLATE.md" 2>/dev/null && echo "✓ Installed plan template" || echo "✓ Plan template already exists"
+
+mkdir -p "$TARGET/$PRDS_DIR"
+cp -n "$PLUGIN_ROOT/templates/prds/TEMPLATE.md" "$TARGET/$PRDS_DIR/TEMPLATE.md" 2>/dev/null && echo "✓ Installed PRD template" || echo "✓ PRD template already exists"
 
 mkdir -p "$TARGET/.claude/agents"
 for agent in "$PLUGIN_ROOT/agents/"*.md; do

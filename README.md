@@ -2,13 +2,13 @@
 
 Development workflow framework for Claude Code (and soon Gemini CLI).
 
-Root provides **tier-based planning**, **doc-aware context gathering**, **RAG-powered search**, **session tracking**, and **implementation plan generation** — all driven by a single `/root <task>` command.
+Root provides **tier-based planning**, **doc-aware context gathering**, **RAG-powered search**, **session tracking**, and **implementation plan generation**.
 
 ## Install
 
 ### 1. Add the Marketplace
 
-In Claude Code, run:
+In Claude Code:
 ```
 /plugin marketplace add BrandCast-Signage/root
 ```
@@ -16,37 +16,69 @@ In Claude Code, run:
 ### 2. Install the Plugin
 
 ```
-/plugin install root@root-plugins
-```
-
-Then reload:
-```
+/plugin install root@root-plugins --scope local
 /reload-plugins
 ```
 
+The plugin auto-installs its RAG MCP server on first session start.
+
 ### 3. Initialize Your Project
 
-```bash
-# From your project directory (uses the installed plugin path)
-~/.claude/plugins/cache/root-plugins/root/1.0.0/scripts/init.sh .
+```
+/root:init
 ```
 
-Or if you cloned the repo locally:
-```bash
-~/Code/root/scripts/init.sh /path/to/my-project
+This interactively detects your project structure, asks which directories contain docs and source code, generates `root.config.json`, installs templates, and ingests your docs into RAG.
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `/root:root <task>` | Start a development session — context gathering + planning |
+| `/root:init` | Interactive project setup |
+| `/root:ingest [action]` | Manage RAG embeddings: `ingest`, `refresh`, `status`, `clear` |
+| `/root:doc-context <topic>` | Find relevant docs by topic |
+| `/root:doc-health [mode]` | Audit doc freshness and gaps: `overview`, `stale`, `gaps`, `validate` |
+
+## Usage
+
+```
+/root:root fix issue 1132      # Start session from a GitHub issue
+/root:root new auth system      # Start session from a description
+/root:root #1234                # Shorthand for issue number
+/root:root reset                # Clear current session
+
+/root:ingest status             # Check RAG database state
+/root:ingest refresh            # Re-ingest all docs after major changes
+/root:doc-context oauth         # Find docs about a topic
+/root:doc-health stale          # Find outdated documentation
 ```
 
-This will:
-1. Create `root.config.json` (edit to customize mappings)
-2. Install workflow reference (`.claude/context/workflow.md`)
-3. Install Implementation Plan template
-4. Install agent templates (`.claude/agents/`)
-5. Install RAG MCP server (`~/.local/lib/root-rag/`)
-6. Generate initial doc index
+### What Root Does
 
-### Configure
+1. **Parses** your task (extracts issue number, description)
+2. **Fetches** GitHub issue context (title, labels, body)
+3. **Classifies** as Tier 1 (full process) or Tier 2 (light process)
+4. **Loads** relevant docs via RAG semantic search
+5. **Recommends** specialist agents based on config mappings
+6. **Tracks** your session (files edited, docs read)
+7. **Drives planning**:
+   - **Tier 1**: Produces a full Implementation Plan with Change Manifest, Dependency Graph, Execution Groups, and Verification Plan
+   - **Tier 2**: Uses Claude's built-in plan mode for lightweight planning
+8. **Generates tasks** from the plan's Execution Groups
 
-Edit `root.config.json` to match your project:
+### Two-Tier Workflow
+
+| | Tier 1 (Full Process) | Tier 2 (Light Process) |
+|---|---|---|
+| **When** | New features, large refactors, multi-package changes | Bug fixes, small changes, config updates |
+| **Planning** | PRD → Implementation Plan → Human review | Built-in plan mode (ephemeral) |
+| **Artifacts** | Persistent plan in `<plansDir>/` | Commit message + PR |
+| **Traceability** | Change Manifest → PRD requirements | GitHub issue/PR linkage |
+
+## Configuration
+
+`root.config.json` in your project root:
 
 ```json
 {
@@ -74,78 +106,26 @@ Edit `root.config.json` to match your project:
 }
 ```
 
-Customize `.claude/agents/specialist-*.md` for your stack — replace `[CUSTOMIZE]` sections.
-
-## Usage
-
-```
-/root:root fix issue 1132      # Start a session from a GitHub issue
-/root:root new auth system      # Start a session from a description
-/root:root #1234                # Shorthand for issue number
-/root:root reset                # Clear the current session
-
-/root:doc-context oauth         # Find docs about a topic
-/root:doc-health overview       # Check doc freshness and gaps
-```
-
-> **Note**: Plugin skills are namespaced as `/root:<skill>`. If you want shorter aliases, add the skills directly to your project's `.claude/skills/` directory.
-
-### What Root Does
-
-1. **Parses** your task (extracts issue number, description)
-2. **Fetches** GitHub issue context (title, labels, body)
-3. **Classifies** as Tier 1 (full process) or Tier 2 (light process)
-4. **Loads** relevant docs via RAG semantic search
-5. **Recommends** specialist agents based on config mappings
-6. **Tracks** your session (files edited, docs read)
-7. **Drives planning**:
-   - **Tier 1**: Produces a full Implementation Plan with Change Manifest, Dependency Graph, Execution Groups, and Verification Plan
-   - **Tier 2**: Uses Claude's built-in plan mode for lightweight planning
-8. **Generates tasks** from the plan's Execution Groups
-
-### Two-Tier Workflow
-
-| | Tier 1 (Full Process) | Tier 2 (Light Process) |
-|---|---|---|
-| **When** | New features, large refactors, multi-package changes | Bug fixes, small changes, config updates |
-| **Planning** | PRD → Implementation Plan → Human review | Built-in plan mode (ephemeral) |
-| **Artifacts** | Persistent plan in `<plansDir>/` | Commit message + PR |
-| **Traceability** | Change Manifest → PRD requirements | GitHub issue/PR linkage |
-
-### Implementation Plan Template
-
-Tier 1 plans include:
-- **Requirements Traceability** — maps PRD requirements to files
-- **Change Manifest** — numbered table of every file change
-- **Dependency Graph** — Mermaid DAG showing execution order
-- **Execution Groups** — parallel work streams with agent assignments
-- **Coding Standards Compliance** — checklist from config
-- **Risk Register** — implementation-specific risks
-- **Verification Plan** — specific test commands and scenarios
-
 ## Components
 
-| Component | Purpose |
-|-----------|---------|
-| `/root` skill | Entry point — context gathering + planning |
-| `/doc-context` skill | Find relevant docs by topic |
-| `/doc-health` skill | Analyze doc freshness and gaps |
-| RAG MCP server | Semantic + keyword search over project docs |
-| Session hooks | Track edits, doc reads, context receipts |
-| Agent templates | Team (architect/implementer/reviewer/tester) + specialist (backend/frontend/database/devops) |
-| Workflow reference | Tier 1/2 process definitions |
-| Plan template | Standardized Implementation Plan format |
+| Component | Type | Purpose |
+|-----------|------|---------|
+| `root` | Skill (model-invoked) | Workflow entry point — context + planning |
+| `mcp-local-rag` | Skill (model-invoked) | RAG query/ingest guidance |
+| `init` | Command | Interactive project setup |
+| `ingest` | Command | RAG embedding management |
+| `doc-context` | Command | Doc discovery by topic |
+| `doc-health` | Command | Doc health auditing |
+| Session hooks | Hooks | Track edits, doc reads, context receipts |
+| Agent templates | Agents | Team (architect/implementer/reviewer/tester) + specialist (backend/frontend/database/devops) |
 
-## RAG Setup
+## Updating
 
-Root uses [mcp-local-rag](https://www.npmjs.com/package/mcp-local-rag) for semantic doc search. The init script installs it to `~/.local/lib/root-rag/` to handle native binary dependencies (lancedb, mupdf).
-
-To ingest docs:
-```bash
-~/Code/root/scripts/ingest.sh .
 ```
-
-Or ask Claude Code: "ingest all docs into the RAG server"
+/plugin marketplace update root-plugins
+/plugin update root@root-plugins --scope local
+/reload-plugins
+```
 
 ## Family
 
