@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "root",
-      "source": ".",
+      "source": "./",
       "description": "Development workflow framework — tier-based planning, doc-aware context, RAG search, session tracking, implementation plans",
       "version": "1.0.0"
     }
