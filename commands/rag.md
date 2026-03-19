@@ -70,4 +70,25 @@ Show what's being indexed and how to change it.
 
    To modify: edit root.config.json → ingest section
    To apply:  /root:rag refresh
+   To discover new directories: /root:rag scan
    ```
+
+## `scan`
+
+Scan the project for directories worth indexing that aren't currently included.
+
+1. Read `root.config.json` → `ingest.include` to get currently included directories
+2. Use Bash to list all top-level directories, excluding obvious noise:
+   - Skip: `node_modules`, `.git`, `dist`, `build`, `.next`, `.claude`, `coverage`, `__pycache__`, `.venv`, `target`, `vendor`, `.cache`, `.turbo`
+3. For each directory NOT already in `include`:
+   - Count `.md` files (respecting exclude patterns)
+   - Skip directories with 0 matching files
+4. Present results using AskUserQuestion with multiSelect:
+   - Show each candidate directory with its file count
+   - Pre-select directories with 5+ files
+   - Options like: `ops/ (12 .md files)`, `e2e-tests/ (3 .md files)`
+5. On selection:
+   - Read `root.config.json`, add selected directories to `ingest.include`
+   - Write the updated config back using the Edit tool
+   - Run the `ingest` action for the newly added directories only
+   - Report: > Added **ops/**, **e2e-tests/** to config. Ingested **15 files**.
