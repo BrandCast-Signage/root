@@ -1,0 +1,40 @@
+{
+  "project": {
+    "name": "my-project",
+    "docsDir": "docs",
+    "plansDir": "docs/plans",
+    "prdsDir": "docs/prds"
+  },
+  "ingest": {
+    "include": ["docs/", "src/"],
+    "exclude": ["**/node_modules/**", "**/dist/**", "**/build/**", "**/_archive/**"],
+    "extensions": [".md"]
+  },
+  "docMappings": [
+    { "pattern": "AUTH|OAUTH|SESSION", "agents": ["specialist-backend"], "skills": [] },
+    { "pattern": "DATABASE|SCHEMA|MIGRATION", "agents": ["specialist-database"], "skills": [] },
+    { "pattern": "DEPLOY|K8S|DOCKER|PIPELINE|CI", "agents": ["specialist-devops"], "skills": [] },
+    { "pattern": "UI|UX|COMPONENT|DESIGN", "agents": ["specialist-frontend"], "skills": [] }
+  ],
+  "labelMappings": [
+    { "label": "area:frontend", "agents": ["specialist-frontend"] },
+    { "label": "area:backend", "agents": ["specialist-backend"] },
+    { "label": "area:database", "agents": ["specialist-database"] },
+    { "label": "area:infrastructure", "agents": ["specialist-devops"] }
+  ],
+  "keywordMappings": [
+    { "keywords": ["schema", "migration", "database", "prisma"], "agents": ["specialist-database"] },
+    { "keywords": ["deploy", "pipeline", "k8s", "docker", "CI", "infrastructure"], "agents": ["specialist-devops"] },
+    { "keywords": ["test", "coverage", "vitest", "jest"], "agents": ["team-tester"] },
+    { "keywords": ["component", "UI", "UX", "frontend", "react"], "agents": ["specialist-frontend"] }
+  ],
+  "codingStandards": [
+    "All new exports have JSDoc with @param, @returns, @throws",
+    "No `any` types — use generics or narrowed unions",
+    "No `console.log` in production code — use structured logger"
+  ],
+  "validation": {
+    "lintCommand": "npm run lint && npm run type-check",
+    "testCommand": "npm test -- <pattern>"
+  }
+}
