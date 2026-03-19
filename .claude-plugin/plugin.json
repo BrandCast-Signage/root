@@ -5,5 +5,8 @@
   "author": {
     "name": "BrandCast",
     "email": "dev@brandcast.app"
-  }
+  },
+  "repository": "https://github.com/BrandCast-Signage/root",
+  "license": "MIT",
+  "keywords": ["workflow", "planning", "rag", "development", "agents"]
 }

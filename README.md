@@ -6,23 +6,33 @@ Root provides **tier-based planning**, **doc-aware context gathering**, **RAG-po
 
 ## Install
 
-### As a Claude Code Plugin
+### 1. Add the Marketplace
 
-```bash
-# Clone the repo
-git clone https://github.com/BrandCast-Signage/root.git ~/Code/root
-
-# Register as a plugin (Claude Code will discover it from the marketplace config)
-# Or symlink into your plugin cache
+In Claude Code, run:
+```
+/plugin marketplace add BrandCast-Signage/root
 ```
 
-### Initialize a Project
+### 2. Install the Plugin
+
+```
+/plugin install root@root-plugins
+```
+
+Then reload:
+```
+/reload-plugins
+```
+
+### 3. Initialize Your Project
 
 ```bash
-# From your project directory
-~/Code/root/scripts/init.sh .
+# From your project directory (uses the installed plugin path)
+~/.claude/plugins/cache/root-plugins/root/1.0.0/scripts/init.sh .
+```
 
-# Or specify a target
+Or if you cloned the repo locally:
+```bash
 ~/Code/root/scripts/init.sh /path/to/my-project
 ```
 
@@ -69,11 +79,16 @@ Customize `.claude/agents/specialist-*.md` for your stack — replace `[CUSTOMIZ
 ## Usage
 
 ```
-/root fix issue 1132      # Start a session from a GitHub issue
-/root new auth system      # Start a session from a description
-/root #1234                # Shorthand for issue number
-/root reset                # Clear the current session
+/root:root fix issue 1132      # Start a session from a GitHub issue
+/root:root new auth system      # Start a session from a description
+/root:root #1234                # Shorthand for issue number
+/root:root reset                # Clear the current session
+
+/root:doc-context oauth         # Find docs about a topic
+/root:doc-health overview       # Check doc freshness and gaps
 ```
+
+> **Note**: Plugin skills are namespaced as `/root:<skill>`. If you want shorter aliases, add the skills directly to your project's `.claude/skills/` directory.
 
 ### What Root Does
 

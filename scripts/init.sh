@@ -67,7 +67,7 @@ fi
 mkdir -p "$TARGET/.claude/agents"
 INSTALLED=0
 SKIPPED=0
-for agent in "$PLUGIN_ROOT/templates/agents/"*.md; do
+for agent in "$PLUGIN_ROOT/agents/"*.md; do
   name="$(basename "$agent")"
   if [[ -f "$TARGET/.claude/agents/$name" && "$FORCE" != "true" ]]; then
     SKIPPED=$((SKIPPED + 1))
