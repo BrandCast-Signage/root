@@ -16,9 +16,16 @@ TARGET="$(cd "$TARGET" 2>/dev/null && pwd)"
 echo "=== Root Framework Init ==="
 echo ""
 
+# Detect agent context
+if [[ -n "${GEMINI_CLI:-}" ]] || [[ "${0}" == *".gemini"* ]] || [[ "${0}" == *"gemini-extensions"* ]]; then
+  AGENT_DIR=".gemini"
+else
+  AGENT_DIR=".claude"
+fi
+
 # --- Install templates ---
-mkdir -p "$TARGET/.claude/context"
-cp -n "$PLUGIN_ROOT/templates/context/workflow.md" "$TARGET/.claude/context/workflow.md" 2>/dev/null && echo "✓ Installed workflow.md" || echo "✓ workflow.md already exists"
+mkdir -p "$TARGET/$AGENT_DIR/context"
+cp -n "$PLUGIN_ROOT/templates/context/workflow.md" "$TARGET/$AGENT_DIR/context/workflow.md" 2>/dev/null && echo "✓ Installed workflow.md" || echo "✓ workflow.md already exists"
 
 # Read plansDir and prdsDir from config if it exists
 if [[ -f "$TARGET/root.config.json" ]]; then
@@ -34,13 +41,13 @@ cp -n "$PLUGIN_ROOT/templates/plans/TEMPLATE.md" "$TARGET/$PLANS_DIR/TEMPLATE.md
 mkdir -p "$TARGET/$PRDS_DIR"
 cp -n "$PLUGIN_ROOT/templates/prds/TEMPLATE.md" "$TARGET/$PRDS_DIR/TEMPLATE.md" 2>/dev/null && echo "✓ Installed PRD template" || echo "✓ PRD template already exists"
 
-mkdir -p "$TARGET/.claude/agents"
+mkdir -p "$TARGET/$AGENT_DIR/agents"
 for agent in "$PLUGIN_ROOT/agents/"*.md; do
-  cp -n "$agent" "$TARGET/.claude/agents/$(basename "$agent")" 2>/dev/null
+  cp -n "$agent" "$TARGET/$AGENT_DIR/agents/$(basename "$agent")" 2>/dev/null
 done
 echo "✓ Agent templates installed"
 
-mkdir -p "$TARGET/.claude/rag-db"
+mkdir -p "$TARGET/$AGENT_DIR/rag-db"
 
 # --- Run ingestion if config exists ---
 if [[ -f "$TARGET/root.config.json" ]]; then

@@ -1,28 +1,39 @@
 # Root
 
-Development workflow framework for Claude Code (and soon Gemini CLI).
+Development workflow framework for Claude Code and Gemini CLI.
 
 Root provides **tier-based planning**, **doc-aware context gathering**, **RAG-powered search**, **session tracking**, and **implementation plan generation**.
 
 ## Install
 
-### 1. Add the Marketplace
+### For Claude Code
 
-In Claude Code:
+**1. Add the Marketplace**
+
 ```
 /plugin marketplace add BrandCast-Signage/root
 ```
 
-### 2. Install the Plugin
+**2. Install the Plugin**
 
 ```
 /plugin install root@root-plugins --scope local
 /reload-plugins
 ```
 
-The plugin auto-installs its RAG MCP server on first session start.
+### For Gemini CLI
 
-### 3. Initialize Your Project
+**1. Install the Extension**
+
+```bash
+gemini extension install https://github.com/BrandCast-Signage/root
+```
+
+---
+
+The extension auto-installs its RAG MCP server on first session start.
+
+### Initialize Your Project
 
 ```
 /root:init

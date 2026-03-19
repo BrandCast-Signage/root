@@ -15,7 +15,7 @@ Show the current state of the RAG database.
    RAG Database:
      Documents: 486 | Chunks: 19,041 | Search: hybrid
      Directories: docs/dev, apps/backend, packages (5 total)
-     DB path: .claude/rag-db/
+     DB path: .claude/rag-db/ (or .gemini/rag-db/)
    ```
 
 ## `ingest`
@@ -26,8 +26,14 @@ Ingest docs into the RAG database from `root.config.json`.
 2. If no config exists, tell the user to run `/root:init` first and stop
 3. Use Bash to call the mcp-local-rag CLI for each include directory:
    ```bash
-   RAG_BIN="${HOME}/.claude/plugins/data/root/node_modules/.bin/mcp-local-rag"
-   $RAG_BIN ingest --db-path .claude/rag-db --cache-dir "${HOME}/.cache/mcp-local-rag/models" <directory>
+   if [[ -n "${GEMINI_CLI:-}" ]]; then
+     RAG_BIN="${HOME}/.gemini/extensions/root/node_modules/.bin/mcp-local-rag"
+     DB_PATH=".gemini/rag-db"
+   else
+     RAG_BIN="${HOME}/.claude/plugins/data/root/node_modules/.bin/mcp-local-rag"
+     DB_PATH=".claude/rag-db"
+   fi
+   $RAG_BIN ingest --db-path "$DB_PATH" --cache-dir "${HOME}/.cache/mcp-local-rag/models" <directory>
    ```
 4. Report results:
    > Ingested **234 files** into RAG.
@@ -79,7 +85,7 @@ Scan the project for directories worth indexing that aren't currently included.
 
 1. Read `root.config.json` → `ingest.include` to get currently included directories
 2. Use Bash to list all top-level directories, excluding obvious noise:
-   - Skip: `node_modules`, `.git`, `dist`, `build`, `.next`, `.claude`, `coverage`, `__pycache__`, `.venv`, `target`, `vendor`, `.cache`, `.turbo`
+   - Skip: `node_modules`, `.git`, `dist`, `build`, `.next`, `.claude`, `.gemini`, `coverage`, `__pycache__`, `.venv`, `target`, `vendor`, `.cache`, `.turbo`
 3. For each directory NOT already in `include`:
    - Count `.md` files (respecting exclude patterns)
    - Skip directories with 0 matching files

@@ -88,7 +88,7 @@ Every task enters one of two tiers based on scope. The `/root` skill classifies 
 
 **When**: Bug fixes, single-file changes, typos, config updates, dependency bumps, obvious improvements.
 
-**Required artifacts**: None persistent. Ephemeral plan in `.claude/plans/` (auto-cleaned after merge).
+**Required artifacts**: None persistent. Ephemeral plan in `<agent-dir>/plans/` (auto-cleaned after merge).
 
 **Flow**:
 
@@ -106,7 +106,7 @@ Every task enters one of two tiers based on scope. The `/root` skill classifies 
 3. Identify the minimal change needed
 
 **Phase 2: Plan (optional)**
-- `/root` Step 8 produces an ephemeral plan via built-in plan mode (`.claude/plans/`)
+- `/root` Step 8 produces an ephemeral plan via built-in plan mode (`<agent-dir>/plans/`)
 - Plans are NOT persisted after merge — GitHub issue/PR linkage provides traceability
 - For trivial fixes (typo, single-line change), `/root` may skip the plan
 

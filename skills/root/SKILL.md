@@ -77,7 +77,7 @@ Rules:
 2. From the query results, identify the top 1-3 most relevant **unique documents** (by filePath)
 3. Read those docs using the Read tool for full context
 4. If no results score below 0.5, that's fine — not every task needs background docs
-5. **Fallback**: If the RAG server is unavailable, fall back to reading `.claude/hooks/data/doc-index.json` and matching by keyword
+5. **Fallback**: If the RAG server is unavailable, fall back to matching by keyword
 
 ### Step 5: Recommend skills and agents
 
@@ -219,14 +219,14 @@ Read `root.config.json` to get `project.plansDir` and `project.prdsDir`.
 
 #### Tier 2 path: Ephemeral plan via built-in plan mode
 
-1. **Enter plan mode**: Use `EnterPlanMode` to create an ephemeral plan in `.claude/plans/`.
+1. **Enter plan mode**: Use `EnterPlanMode` to create an ephemeral plan in `.claude/plans/` (or `.gemini/plans/` if using Gemini CLI).
 
 2. **Write a lightweight plan** covering:
    - Files to change and what changes in each (code-section level)
    - Verification commands from `root.config.json` → `validation`
    - No persistent artifact needed — the commit message and PR description serve as source of record
 
-3. **Update session state**: Set `plan_path` to the `.claude/plans/` file path.
+3. **Update session state**: Set `plan_path` to the `.claude/plans/` (or `.gemini/plans/`) file path.
 
 The plan is ready when the user approves it via plan mode. GitHub issue/PR linkage provides traceability.
 

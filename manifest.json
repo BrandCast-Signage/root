@@ -1,0 +1,10 @@
+{
+  "name": "root",
+  "description": "Development workflow framework — tier-based planning, doc-aware context gathering, RAG-powered search, session tracking, and implementation plan generation",
+  "version": "1.4.1",
+  "commands": "commands/*.toml",
+  "hooks": "hooks/gemini-hooks.json",
+  "skills": [
+    "skills/*/SKILL.md"
+  ]
+}

@@ -35,7 +35,7 @@ Use AskUserQuestion to ask where implementation plans and PRDs should go. Offer 
 ### Step 4: Select directories to index for RAG
 
 List all top-level directories using `ls`, excluding obvious noise:
-- Skip: `node_modules`, `.git`, `dist`, `build`, `.next`, `.claude`, `coverage`, `__pycache__`, `.venv`, `target`, `vendor`
+- Skip: `node_modules`, `.git`, `dist`, `build`, `.next`, `.claude`, `.gemini`, `coverage`, `__pycache__`, `.venv`, `target`, `vendor`
 
 Use AskUserQuestion to let the user select which directories to include in RAG indexing. Pre-select directories that look like docs or source code.
 
@@ -72,12 +72,16 @@ Leave mappings and standards empty — the user fills these in as they use Root.
 ### Step 6: Install templates
 
 Run the plugin's `init.sh` script via Bash to install:
-- `.claude/context/workflow.md`
+- `<agent-dir>/context/workflow.md`
 - `<plansDir>/TEMPLATE.md`
-- `.claude/agents/*.md` (agent templates)
+- `<agent-dir>/agents/*.md` (agent templates)
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/init.sh .
+# Determine agent dir
+AGENT_DIR=".claude"
+if [[ -n "${GEMINI_CLI:-}" ]]; then AGENT_DIR=".gemini"; fi
+
+${AGENT_DIR_ROOT:-.}/scripts/init.sh .
 ```
 
 Note: `init.sh` will skip config generation since `root.config.json` already exists from Step 5.
@@ -87,8 +91,14 @@ Note: `init.sh` will skip config generation since `root.config.json` already exi
 Use Bash to call the mcp-local-rag CLI to ingest each include directory:
 
 ```bash
-RAG_BIN="${HOME}/.claude/plugins/data/root/node_modules/.bin/mcp-local-rag"
-$RAG_BIN ingest --db-path .claude/rag-db --cache-dir "${HOME}/.cache/mcp-local-rag/models" <directory>
+if [[ -n "${GEMINI_CLI:-}" ]]; then
+  RAG_BIN="${HOME}/.gemini/extensions/root/node_modules/.bin/mcp-local-rag"
+  DB_PATH=".gemini/rag-db"
+else
+  RAG_BIN="${HOME}/.claude/plugins/data/root/node_modules/.bin/mcp-local-rag"
+  DB_PATH=".claude/rag-db"
+fi
+$RAG_BIN ingest --db-path "$DB_PATH" --cache-dir "${HOME}/.cache/mcp-local-rag/models" <directory>
 ```
 
 Run once per include directory from the config.
@@ -108,7 +118,7 @@ Plans: docs/dev/plans/
 RAG: 486 files ingested
 
 Next:
-- Customize .claude/agents/specialist-*.md for your stack
+- Customize <agent-dir>/agents/specialist-*.md for your stack
 - Fill in docMappings/labelMappings in root.config.json as you work
 - Run /root:root <task> to start your first session
 ```

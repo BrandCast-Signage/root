@@ -18,12 +18,22 @@ if [[ ! -f "$CONFIG" ]]; then
   exit 1
 fi
 
-RAG_BIN="${HOME}/.claude/plugins/data/root/node_modules/.bin/mcp-local-rag"
-DB_PATH="$TARGET/.claude/rag-db"
+# Detect agent context
+if [[ -n "${GEMINI_CLI:-}" ]] || [[ "${0}" == *".gemini"* ]] || [[ "${0}" == *"gemini-extensions"* ]]; then
+  AGENT_DIR=".gemini"
+  RAG_BIN="${HOME}/.gemini/extensions/root/node_modules/.bin/mcp-local-rag"
+  CLI_NAME="Gemini CLI"
+else
+  AGENT_DIR=".claude"
+  RAG_BIN="${HOME}/.claude/plugins/data/root/node_modules/.bin/mcp-local-rag"
+  CLI_NAME="Claude Code"
+fi
+
+DB_PATH="$TARGET/$AGENT_DIR/rag-db"
 CACHE_DIR="${HOME}/.cache/mcp-local-rag/models"
 
 if [[ ! -f "$RAG_BIN" ]]; then
-  echo "ERROR: mcp-local-rag not installed. Restart Claude Code to trigger auto-install."
+  echo "ERROR: mcp-local-rag not installed. Restart $CLI_NAME to trigger auto-install."
   exit 1
 fi
 
