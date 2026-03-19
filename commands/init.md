@@ -1,10 +1,3 @@
----
-name: init
-description: "Initialize Root framework for your project. Interactive setup: detects project structure, configures docs/source directories, installs agent templates, and ingests docs into RAG. Run once per project."
-user-invocable: true
-argument: "[project-dir] — defaults to current directory"
----
-
 # /root:init — Project Setup
 
 Interactive setup for the Root development workflow framework. Detects your project structure, asks a few questions, generates config, and ingests your docs into RAG.
@@ -91,13 +84,14 @@ Note: `init.sh` will skip config generation since `root.config.json` already exi
 
 ### Step 7: Ingest docs into RAG
 
-Use the `mcp__plugin_root_local-rag__ingest_file` tool to ingest each markdown file in the selected directories. Use Glob to find all `.md` files in the include directories (respecting exclude patterns), then call `ingest_file` for each.
+Use Bash to call the mcp-local-rag CLI to ingest each include directory:
 
-For large projects (>100 files), use Bash to call the mcp-local-rag CLI instead:
 ```bash
 RAG_BIN="${HOME}/.claude/plugins/data/root/node_modules/.bin/mcp-local-rag"
 $RAG_BIN ingest --db-path .claude/rag-db --cache-dir "${HOME}/.cache/mcp-local-rag/models" <directory>
 ```
+
+Run once per include directory from the config.
 
 Report the count when done:
 > Ingested **486 files** into RAG.
