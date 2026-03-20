@@ -1,4 +1,0 @@
-name = "root:init"
-description = "Initialize Root framework — detect project structure, configure directories, install templates, ingest docs into RAG"
-type = "prompt"
-prompt = "commands/init.md"
