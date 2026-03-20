@@ -49,6 +49,14 @@ echo "✓ Agent templates installed"
 
 mkdir -p "$TARGET/$AGENT_DIR/rag-db"
 
+# --- Update .gitignore ---
+if [[ -f "$TARGET/.gitignore" ]] && ! grep -q "^\.root/" "$TARGET/.gitignore"; then
+  echo "" >> "$TARGET/.gitignore"
+  echo "# Root framework local data" >> "$TARGET/.gitignore"
+  echo ".root/" >> "$TARGET/.gitignore"
+  echo "✓ Added .root/ to .gitignore"
+fi
+
 # --- Run ingestion if config exists ---
 if [[ -f "$TARGET/root.config.json" ]]; then
   echo ""

@@ -19,7 +19,8 @@ if [[ ! -f "$CONFIG" ]]; then
 fi
 
 # Use shared database directory
-DB_PATH="$TARGET/.root/rag-db"
+DB_REL_PATH=$(python3 -c "import json; print(json.load(open('$CONFIG')).get('ingest', {}).get('dbPath', '.root/rag-db'))" 2>/dev/null || echo ".root/rag-db")
+DB_PATH="$TARGET/$DB_REL_PATH"
 CACHE_DIR="${HOME}/.cache/mcp-local-rag/models"
 
 # Execute using node and the local framework installation

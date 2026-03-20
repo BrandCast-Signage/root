@@ -15,7 +15,7 @@ Show the current state of the RAG database.
    RAG Database:
      Documents: 486 | Chunks: 19,041 | Search: hybrid
      Directories: docs/dev, apps/backend, packages (5 total)
-     DB path: .claude/rag-db/ (or .gemini/rag-db/)
+     DB path: .root/rag-db (from root.config.json)
    ```
 
 ## `ingest`
@@ -26,14 +26,9 @@ Ingest docs into the RAG database from `root.config.json`.
 2. If no config exists, tell the user to run `/root:init` first and stop
 3. Use Bash to call the mcp-local-rag CLI for each include directory:
    ```bash
-   if [[ -n "${GEMINI_CLI:-}" ]]; then
-     RAG_BIN="${HOME}/.gemini/extensions/root/node_modules/.bin/mcp-local-rag"
-     DB_PATH=".gemini/rag-db"
-   else
-     RAG_BIN="${HOME}/.claude/plugins/data/root/node_modules/.bin/mcp-local-rag"
-     DB_PATH=".claude/rag-db"
-   fi
-   $RAG_BIN ingest --db-path "$DB_PATH" --cache-dir "${HOME}/.cache/mcp-local-rag/models" <directory>
+   RAG_BIN="${HOME}/.root-framework/mcp/node_modules/mcp-local-rag/dist/index.js"
+   DB_PATH=$(python3 -c "import json; print(json.load(open('root.config.json')).get('ingest', {}).get('dbPath', '.root/rag-db'))" 2>/dev/null || echo ".root/rag-db")
+   node "$RAG_BIN" ingest --db-path "$DB_PATH" --cache-dir "${HOME}/.cache/mcp-local-rag/models" <directory>
    ```
 4. Report results:
    > Ingested **234 files** into RAG.

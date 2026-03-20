@@ -27,7 +27,8 @@ fi
 
 # If config exists, check if we need to auto-ingest
 if [[ -f "$SCRIPT_DIR/root.config.json" ]]; then
-  DB_PATH="$SCRIPT_DIR/.root/rag-db"
+  DB_REL_PATH=$(python3 -c "import json; print(json.load(open('$SCRIPT_DIR/root.config.json')).get('ingest', {}).get('dbPath', '.root/rag-db'))" 2>/dev/null || echo ".root/rag-db")
+  DB_PATH="$SCRIPT_DIR/$DB_REL_PATH"
 
   # Check if DB has documents (lancedb creates a directory)
   if [[ ! -d "$DB_PATH" ]] || [[ -z "$(ls -A "$DB_PATH" 2>/dev/null)" ]]; then

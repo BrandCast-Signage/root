@@ -6,6 +6,7 @@
     "prdsDir": "docs/prds"
   },
   "ingest": {
+    "dbPath": ".root/rag-db",
     "include": ["docs/", "src/"],
     "exclude": ["**/node_modules/**", "**/dist/**", "**/build/**", "**/_archive/**"],
     "extensions": [".md"]
