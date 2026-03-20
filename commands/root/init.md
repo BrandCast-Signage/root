@@ -108,7 +108,7 @@ Use Bash to call the mcp-local-rag CLI to ingest each include directory:
 ```bash
 RAG_BIN="${HOME}/.root-framework/mcp/node_modules/mcp-local-rag/dist/index.js"
 DB_PATH=$(python3 -c "import json; print(json.load(open('root.config.json')).get('ingest', {}).get('dbPath', '.root/rag-db'))" 2>/dev/null || echo ".root/rag-db")
-node "$RAG_BIN" ingest --db-path "$DB_PATH" --cache-dir "${HOME}/.cache/mcp-local-rag/models" <directory>
+node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "${HOME}/.cache/mcp-local-rag/models" ingest <directory>
 ```
 
 Run once per include directory from the config.

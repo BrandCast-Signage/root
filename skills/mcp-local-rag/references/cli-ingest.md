@@ -3,17 +3,22 @@
 ## Command
 
 ```bash
-npx mcp-local-rag ingest [options] <path>
+npx mcp-local-rag [global-options] ingest [options] <path>
 ```
 
-## Options
+## Global Options (must appear before `ingest`)
 
 | Option | Env Var | Default | Description |
 |--------|---------|---------|-------------|
 | `--db-path <path>` | `DB_PATH` | `./lancedb/` | LanceDB database path |
-| `--base-dir <path>` | `BASE_DIR` | cwd | Base directory for documents |
 | `--cache-dir <path>` | `CACHE_DIR` | `./models/` | Model cache directory |
 | `--model-name <name>` | `MODEL_NAME` | `Xenova/all-MiniLM-L6-v2` | Embedding model |
+
+## Ingest Options
+
+| Option | Env Var | Default | Description |
+|--------|---------|---------|-------------|
+| `--base-dir <path>` | `BASE_DIR` | cwd | Base directory for documents |
 | `--max-file-size <n>` | `MAX_FILE_SIZE` | `104857600` | Max file size in bytes |
 | `-h, --help` | — | — | Show usage with defaults |
 

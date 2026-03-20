@@ -53,7 +53,7 @@ while IFS= read -r dir; do
   fi
 
   echo "Ingesting $dir..."
-  $RAG_CMD ingest --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" "$full_path" 2>&1
+  $RAG_CMD --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" ingest "$full_path" 2>&1
   echo ""
 done <<< "$INCLUDE_DIRS"
 
