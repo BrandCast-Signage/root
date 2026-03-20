@@ -9,7 +9,7 @@
       "name": "root",
       "source": "./",
       "description": "Development workflow framework — tier-based planning, doc-aware context, RAG search, session tracking, implementation plans",
-      "version": "1.4.4"
+      "version": "1.4.5"
     }
   ]
 }
