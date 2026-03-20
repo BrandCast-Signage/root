@@ -1,7 +1,7 @@
 {
   "name": "root",
   "description": "Development workflow framework — tier-based planning, doc-aware context gathering, RAG-powered search, session tracking, and implementation plan generation",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "author": {
     "name": "BrandCast",
     "email": "dev@brandcast.app"
@@ -9,7 +9,7 @@
   "repository": "https://github.com/BrandCast-Signage/root",
   "license": "MIT",
   "keywords": ["workflow", "planning", "rag", "development", "agents"],
-  "commands": "./commands",
+  "commands": "./commands/root",
   "hooks": "./.claude-plugin/hooks.json",
   "skills": "./skills",
   "agents": [
