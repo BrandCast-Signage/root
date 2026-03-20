@@ -4,6 +4,16 @@ Manage and analyze documentation across the full indexed corpus (everything in `
 
 Parse the first word of the argument to determine the action. Default to `health` if no argument.
 
+## Shared Setup
+
+Subcommands that query the RAG database use these variables. Set them first:
+
+```bash
+RAG_BIN="${HOME}/.root-framework/mcp/node_modules/mcp-local-rag/dist/index.js"
+DB_PATH=$(python3 -c "import json; print(json.load(open('root.config.json')).get('ingest', {}).get('dbPath', '.root/rag-db'))" 2>/dev/null || echo ".root/rag-db")
+CACHE_DIR="${HOME}/.cache/mcp-local-rag/models"
+```
+
 ## `health` (default)
 
 Summary dashboard across the full corpus. Lead with headlines, not lists.
@@ -35,6 +45,7 @@ Missing frontmatter: <count> files
 - <n> aging docs (run `/root:docs stale`)
 - <n> docs without frontmatter (run `/root:docs fix`)
 - <n> frontmatter validation errors (run `/root:docs validate`)
+- <n> undocumented components (run `/root:docs scan`)
 ```
 
 Keep it scannable. Only list individual files in the "Needs Attention" section if there are fewer than 5 problems. Otherwise, summarize counts and point to the detailed commands.
@@ -43,8 +54,10 @@ Keep it scannable. Only list individual files in the "Needs Attention" section i
 
 Semantic search across the RAG database.
 
-1. Use `mcp__plugin_root_local_rag__query_documents` with a query formulated from the topic
-   - Include topic keywords plus contextual terms
+1. Run the shared setup, then query:
+   ```bash
+   node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" query "<topic keywords plus contextual terms>"
+   ```
    - Use `limit: 10`
 2. Filter by score: use < 0.3 directly, consider 0.3-0.5, skip > 0.5
 3. Read the top 1-3 most relevant unique documents
@@ -70,19 +83,112 @@ Find outdated documentation, grouped by severity.
    - **Frontmatter out of date**: list files where git is newer than frontmatter `updated:`
 4. Output as grouped sections, sorted oldest first within each group
 
-## `gaps`
+## `scan`
 
-Find undocumented systems.
+Discover undocumented code components, triage interactively, and generate docs. This is the primary onboarding command for projects with incomplete documentation.
+
+### Phase 1: Discovery
+
+Identify code components that should have documentation but don't.
 
 1. Read `root.config.json` → `project.docsDir` for where docs live
-2. Scan source directories in `ingest.include` for structural patterns:
-   - Look for directories under `src/services/`, `src/routes/`, `apps/*/src/`, `packages/*/src/`
-   - For each, check if a corresponding doc exists in `docsDir`
-3. Group by severity:
-   - **HIGH**: services/routes with API endpoints but no doc
-   - **MEDIUM**: internal services without docs
-   - **LOW**: utilities, helpers
-4. Suggest doc titles and paths for each gap
+2. **If `docTargets` exists in config**, use it for discovery:
+   ```json
+   "docTargets": [
+     { "glob": "packages/*/src/index.ts", "type": "package", "docsDir": "docs/packages" },
+     { "glob": "apps/*/src/services/*.ts", "type": "service", "docsDir": "docs/services" }
+   ]
+   ```
+   For each target, Glob for matching files, then check if a corresponding doc exists in the target's `docsDir`.
+
+3. **If no `docTargets`**, use heuristics across `ingest.include` source directories:
+   - Directories containing `package.json` → type: `package`
+   - Files exporting route handlers (`router.`, `app.get/post/put/delete`, `express.Router()`) → type: `api`
+   - Files with class definitions or 5+ named exports → type: `service`
+   - Directories matching common patterns:
+     - `services/`, `middleware/` → type: `service`
+     - `routes/`, `api/` → type: `api`
+     - `lib/`, `utils/`, `helpers/` → type: `module`
+   - For each discovered component, check if a doc with a matching name exists anywhere under `docsDir`
+
+4. Filter out components that already have corresponding docs
+
+### Phase 2: Triage
+
+Present discovered gaps interactively.
+
+1. Group by priority:
+   - **HIGH**: Has public API surface (route handlers, exported interfaces, package entry points) but no doc
+   - **MEDIUM**: Internal service/module without doc
+   - **LOW**: Utility/helper without doc
+2. Output a summary:
+   ```
+   ## Documentation Scan — <project name>
+
+   Found <n> undocumented components:
+     HIGH:   <n> (public APIs, packages)
+     MEDIUM: <n> (internal services)
+     LOW:    <n> (utilities, helpers)
+   ```
+3. Present via AskUserQuestion with multiSelect — show each component with its type, source path, and suggested doc path. Pre-select HIGH priority items.
+4. For each selected item, confirm the doc path (under `project.docsDir`) and type
+
+### Phase 3: Create
+
+Generate docs for each selected component.
+
+1. Read the source code for the component (entry file + key exports)
+2. Generate frontmatter:
+   ```yaml
+   ---
+   title: <component name, human-readable>
+   type: <from discovery phase>
+   status: draft
+   created: <today YYYY-MM-DD>
+   updated: <today YYYY-MM-DD>
+   ---
+   ```
+3. Write first-draft content based on what the code actually does:
+   - **For packages**: purpose, main exports, dependencies, usage examples
+   - **For APIs/routes**: endpoints, request/response shapes, auth requirements
+   - **For services**: responsibility, public methods, dependencies, side effects
+   - **For modules/utils**: exported functions, parameters, return types
+4. Write each file using the Edit tool
+5. Report summary:
+   ```
+   Created <n> docs:
+     docs/services/auth-service.md (service, draft)
+     docs/packages/shared-types.md (package, draft)
+     ...
+
+   Run `/root:docs health` to see updated coverage.
+   ```
+
+## `create <path-or-topic>`
+
+Create a single doc outside the scan flow.
+
+1. Determine what to document:
+   - If argument is a **source file path** (e.g., `src/services/auth.ts`) → read the file, generate doc for it
+   - If argument is a **doc path** (e.g., `docs/auth-service.md`) → scaffold at that location, search for related source via Glob
+   - If argument is a **topic string** (e.g., `authentication`) → Glob for related source files, read the most relevant ones
+2. Determine doc type from the target path (same rules as `fix`):
+   - `plans/` → `plan`, `prds/` → `prd`, `architecture/` or `ADR-` → `adr`
+   - `guides/` → `guide`, `specs/` → `spec`, `research/` → `research`
+   - default → `doc`
+3. If type is `plan` or `prd`, check for a template in `<plansDir>/TEMPLATE.md` or `<prdsDir>/TEMPLATE.md` and use its structure
+4. Generate frontmatter:
+   ```yaml
+   ---
+   title: <inferred from source or topic>
+   type: <from step 2>
+   status: draft
+   created: <today YYYY-MM-DD>
+   updated: <today YYYY-MM-DD>
+   ---
+   ```
+5. Read source code and write first-draft content with real descriptions of what the code does
+6. Write the file, report the path
 
 ## `validate`
 

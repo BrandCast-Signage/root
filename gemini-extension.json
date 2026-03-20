@@ -1,11 +1,12 @@
 {
   "name": "root",
   "description": "Development workflow framework — tier-based planning, doc-aware context gathering, RAG-powered search, session tracking, and implementation plan generation",
-  "version": "1.5.8",
+  "version": "1.5.9",
   "commands": "commands/**/*.toml",
   "hooks": "hooks/gemini-hooks.json",
   "skills": [
-    "skills/*/SKILL.md"
+    "skills/root/SKILL.md",
+    "skills/mcp-local-rag/SKILL.md"
   ],
   "agents": [
     "agents/*.md"

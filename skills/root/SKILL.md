@@ -70,8 +70,13 @@ Rules:
 
 ### Step 4: Load relevant docs
 
-1. Use the `mcp__plugin_root_local-rag__query_documents` tool to search for relevant documentation:
-   - Formulate a query from the task description + issue title/body
+1. Query the RAG database for relevant documentation:
+   ```bash
+   RAG_BIN="${HOME}/.root-framework/mcp/node_modules/mcp-local-rag/dist/index.js"
+   DB_PATH=$(python3 -c "import json; print(json.load(open('root.config.json')).get('ingest', {}).get('dbPath', '.root/rag-db'))" 2>/dev/null || echo ".root/rag-db")
+   CACHE_DIR="${HOME}/.cache/mcp-local-rag/models"
+   node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" query "<query from task description + issue title/body>"
+   ```
    - Use `limit: 10` to get a broad set of results
    - Filter results: use chunks with score < 0.3 directly, consider 0.3-0.5 if relevant, skip > 0.5
 2. From the query results, identify the top 1-3 most relevant **unique documents** (by filePath)

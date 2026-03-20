@@ -1,4 +1,4 @@
 name = "root:docs"
-description = "Documentation management — search, health, stale, gaps, validate, fix"
+description = "Documentation management — health, search, stale, scan, validate, fix, create"
 type = "prompt"
 prompt = "commands/root/docs.md"

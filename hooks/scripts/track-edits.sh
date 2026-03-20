@@ -16,6 +16,35 @@ if [[ "$FILE_PATH" == *docs/dev/app/*.md && -f "$SESSION_FILE" ]]; then
   jq --arg p "$REL_PATH" '.docs_edited += [$p] | .docs_edited |= unique' "$SESSION_FILE" > "${SESSION_FILE}.tmp" && mv "${SESSION_FILE}.tmp" "$SESSION_FILE"
 fi
 
+# Frontmatter check for .md files in doc directories
+if [[ "$FILE_PATH" == *.md && -f "root.config.json" ]]; then
+  # Check if this file is in an ingest.include directory
+  IN_DOC_DIR=false
+  while IFS= read -r inc_dir; do
+    if [[ "$FILE_PATH" == *"$inc_dir"* ]]; then
+      IN_DOC_DIR=true
+      break
+    fi
+  done < <(python3 -c "import json; [print(d) for d in json.load(open('root.config.json')).get('ingest', {}).get('include', [])]" 2>/dev/null)
+
+  if [[ "$IN_DOC_DIR" == "true" && -f "$FILE_PATH" ]]; then
+    FIRST_LINE=$(head -1 "$FILE_PATH")
+    if [[ "$FIRST_LINE" != "---" ]]; then
+      REL=$(echo "$FILE_PATH" | sed "s|$(pwd)/||")
+      echo ""
+      echo "⚠️  Missing frontmatter in $REL — run /root:docs fix $REL"
+    else
+      HAS_TITLE=$(head -10 "$FILE_PATH" | grep -c '^title:')
+      HAS_STATUS=$(head -10 "$FILE_PATH" | grep -c '^status:')
+      if [[ "$HAS_TITLE" -eq 0 || "$HAS_STATUS" -eq 0 ]]; then
+        REL=$(echo "$FILE_PATH" | sed "s|$(pwd)/||")
+        echo ""
+        echo "⚠️  Incomplete frontmatter in $REL (missing title or status) — run /root:docs fix $REL"
+      fi
+    fi
+  fi
+fi
+
 # Only track TypeScript source files (not tests, not config)
 if [[ ! "$FILE_PATH" =~ \.(ts|tsx)$ ]]; then
   exit 0

@@ -29,6 +29,11 @@
     { "keywords": ["test", "coverage", "vitest", "jest"], "agents": ["team-tester"] },
     { "keywords": ["component", "UI", "UX", "frontend", "react"], "agents": ["specialist-frontend"] }
   ],
+  "docTargets": [
+    { "glob": "packages/*/src/index.ts", "type": "package", "docsDir": "docs/packages" },
+    { "glob": "apps/*/src/services/*.ts", "type": "service", "docsDir": "docs/services" },
+    { "glob": "apps/*/src/routes/*.ts", "type": "api", "docsDir": "docs/api" }
+  ],
   "codingStandards": [
     "All new exports have JSDoc with @param, @returns, @throws",
     "No `any` types — use generics or narrowed unions",
