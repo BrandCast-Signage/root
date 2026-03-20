@@ -154,14 +154,18 @@ Generate docs for each selected component.
    - **For services**: responsibility, public methods, dependencies, side effects
    - **For modules/utils**: exported functions, parameters, return types
 4. Write each file using the Edit tool
-5. Report summary:
+5. Ingest each created doc into the RAG database:
+   ```bash
+   node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" ingest <new-doc-path>
+   ```
+6. Report summary:
    ```
    Created <n> docs:
-     docs/services/auth-service.md (service, draft)
-     docs/packages/shared-types.md (package, draft)
+     docs/services/auth-service.md (service, draft) — ingested
+     docs/packages/shared-types.md (package, draft) — ingested
      ...
 
-   Run `/root:docs health` to see updated coverage.
+   All <n> docs added to RAG. Run `/root:docs health` to see updated coverage.
    ```
 
 ## `create <path-or-topic>`
@@ -188,7 +192,12 @@ Create a single doc outside the scan flow.
    ---
    ```
 5. Read source code and write first-draft content with real descriptions of what the code does
-6. Write the file, report the path
+6. Write the file
+7. Ingest the new doc into the RAG database:
+   ```bash
+   node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" ingest <new-doc-path>
+   ```
+8. Report the path and confirm it was added to RAG
 
 ## `validate`
 
