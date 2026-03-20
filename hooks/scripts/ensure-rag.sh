@@ -1,45 +1,37 @@
 #!/bin/bash
-# Ensure mcp-local-rag is installed and RAG database is populated.
-# Runs on SessionStart.
-# - First run: installs mcp-local-rag into plugin data dir
+# Ensure RAG database is populated on SessionStart.
+# - First run: installs mcp-local-rag into a unified framework directory
 # - If DB is empty and root.config.json exists: auto-ingests
 
-# Detect agent context
-if [[ -n "${GEMINI_CLI:-}" ]] || [[ "${0}" == *".gemini"* ]] || [[ "${0}" == *"gemini-extensions"* ]]; then
-  PLUGIN_DATA="${HOME}/.gemini/extensions/root"
-  AGENT_DIR=".gemini"
-  CLI_NAME="Gemini CLI"
-else
-  PLUGIN_DATA="${HOME}/.claude/plugins/data/root"
-  AGENT_DIR=".claude"
-  CLI_NAME="Claude Code"
-fi
+# Capture script directory before any cd operations
+SCRIPT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 
-RAG_BIN="$PLUGIN_DATA/node_modules/.bin/mcp-local-rag"
+# Unified installation directory
+INSTALL_DIR="${HOME}/.root-framework/mcp"
+RAG_BIN="$INSTALL_DIR/node_modules/mcp-local-rag/dist/index.js"
 
 # --- Install RAG if needed ---
-if [[ ! -f "$PLUGIN_DATA/node_modules/mcp-local-rag/dist/index.js" ]]; then
-  mkdir -p "$PLUGIN_DATA"
-  cd "$PLUGIN_DATA"
+if [[ ! -f "$RAG_BIN" ]]; then
+  echo "Root: Installing RAG MCP server (this may take a few minutes for native bindings)..."
+  mkdir -p "$INSTALL_DIR"
+  cd "$INSTALL_DIR" || exit 1
   npm init -y --silent 2>/dev/null
   npm install mcp-local-rag --silent 2>&1
-
-  if [[ -f "$PLUGIN_DATA/node_modules/mcp-local-rag/dist/index.js" ]]; then
-    echo "Root: RAG MCP server installed. Restart $CLI_NAME to activate."
-  else
-    echo "Root: Failed to install mcp-local-rag. Run: cd $PLUGIN_DATA && npm install mcp-local-rag"
+  
+  if [[ ! -f "$RAG_BIN" ]]; then
+    echo "Root: Failed to install mcp-local-rag. Try running manually: cd $INSTALL_DIR && npm install mcp-local-rag"
+    exit 0
   fi
-  exit 0
+  echo "Root: RAG MCP server installed successfully."
 fi
 
-# --- Auto-ingest if DB empty and config exists ---
-if [[ -f "root.config.json" && -x "$RAG_BIN" ]]; then
-  DB_PATH="$AGENT_DIR/rag-db"
+# If config exists, check if we need to auto-ingest
+if [[ -f "$SCRIPT_DIR/root.config.json" ]]; then
+  DB_PATH="$SCRIPT_DIR/.root/rag-db"
 
   # Check if DB has documents (lancedb creates a directory)
   if [[ ! -d "$DB_PATH" ]] || [[ -z "$(ls -A "$DB_PATH" 2>/dev/null)" ]]; then
     echo "Root: RAG database empty. Auto-ingesting from root.config.json..."
-    SCRIPT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-    "$SCRIPT_DIR/scripts/ingest.sh" . 2>&1
+    "$SCRIPT_DIR/scripts/ingest.sh" "$SCRIPT_DIR" 2>&1
   fi
 fi

@@ -1,4 +1,4 @@
-name = "root:rag"
+name = "rag"
 description = "Manage RAG database — status, ingest, refresh, clear, config"
 type = "prompt"
 prompt = "commands/rag.md"

@@ -18,22 +18,16 @@ if [[ ! -f "$CONFIG" ]]; then
   exit 1
 fi
 
-# Detect agent context
-if [[ -n "${GEMINI_CLI:-}" ]] || [[ "${0}" == *".gemini"* ]] || [[ "${0}" == *"gemini-extensions"* ]]; then
-  AGENT_DIR=".gemini"
-  RAG_BIN="${HOME}/.gemini/extensions/root/node_modules/.bin/mcp-local-rag"
-  CLI_NAME="Gemini CLI"
-else
-  AGENT_DIR=".claude"
-  RAG_BIN="${HOME}/.claude/plugins/data/root/node_modules/.bin/mcp-local-rag"
-  CLI_NAME="Claude Code"
-fi
-
-DB_PATH="$TARGET/$AGENT_DIR/rag-db"
+# Use shared database directory
+DB_PATH="$TARGET/.root/rag-db"
 CACHE_DIR="${HOME}/.cache/mcp-local-rag/models"
 
+# Execute using node and the local framework installation
+RAG_BIN="${HOME}/.root-framework/mcp/node_modules/mcp-local-rag/dist/index.js"
+RAG_CMD="node $RAG_BIN"
+
 if [[ ! -f "$RAG_BIN" ]]; then
-  echo "ERROR: mcp-local-rag not installed. Restart $CLI_NAME to trigger auto-install."
+  echo "ERROR: mcp-local-rag not installed. Run ensure-rag.sh or restart your CLI."
   exit 1
 fi
 
@@ -58,7 +52,7 @@ while IFS= read -r dir; do
   fi
 
   echo "Ingesting $dir..."
-  "$RAG_BIN" ingest --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" "$full_path" 2>&1
+  $RAG_CMD ingest --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" "$full_path" 2>&1
   echo ""
 done <<< "$INCLUDE_DIRS"
 

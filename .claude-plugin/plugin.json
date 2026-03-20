@@ -1,12 +1,17 @@
 {
   "name": "root",
   "description": "Development workflow framework — tier-based planning, doc-aware context gathering, RAG-powered search, session tracking, and implementation plan generation",
-  "version": "1.4.2",
+  "version": "1.4.4",
   "author": {
     "name": "BrandCast",
     "email": "dev@brandcast.app"
   },
   "repository": "https://github.com/BrandCast-Signage/root",
   "license": "MIT",
-  "keywords": ["workflow", "planning", "rag", "development", "agents"]
+  "keywords": ["workflow", "planning", "rag", "development", "agents"],
+  "commands": "./commands",
+  "hooks": "./hooks/hooks.json",
+  "skills": "./skills",
+  "agents": ["./agents"],
+  "mcpServers": ["./.mcp.json"]
 }
