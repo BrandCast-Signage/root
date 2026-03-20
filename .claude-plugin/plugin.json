@@ -10,7 +10,7 @@
   "license": "MIT",
   "keywords": ["workflow", "planning", "rag", "development", "agents"],
   "commands": "./commands",
-  "hooks": "./hooks.json",
+  "hooks": "./.claude-plugin/hooks.json",
   "skills": "./skills",
   "agents": [
     "./agents/team-architect.md",
