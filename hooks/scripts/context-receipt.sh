@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 # Stop hook: Output a context receipt summarizing the session
 #
 # Reads the CDD session state and outputs a summary of what

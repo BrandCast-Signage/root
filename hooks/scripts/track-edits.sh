@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 # PostToolUse hook: Track edited files and nudge test-sync
 # Runs after Edit/Write completes successfully
 

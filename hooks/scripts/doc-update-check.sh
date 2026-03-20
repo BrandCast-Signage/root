@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 # Stop hook: Warn if Tier 1 work didn't update living docs
 #
 # Reads session state. If tier=tier1 and source files were edited

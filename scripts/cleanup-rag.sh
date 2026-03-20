@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 # root cleanup-rag — remove excluded files from the RAG database
 #
 # Usage: cleanup-rag [project-dir]

@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 # Ensure RAG database is populated on SessionStart.
 # - First run: installs mcp-local-rag into a unified framework directory
 # - If DB is empty and root.config.json exists: auto-ingests

@@ -262,6 +262,10 @@ gemini extension update root
 
 **Session file**: `/tmp/root-session.json` is ephemeral and cleared if the session exceeds 4 hours. It does not persist across terminal restarts.
 
+## License
+
+[MIT](LICENSE)
+
 ## Family
 
 Root is part of the BrandCast agent family:

@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 # PostToolUse hook (Read): Track when living docs are read
 #
 # Records doc reads in the CDD session state file.

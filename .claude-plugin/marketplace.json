@@ -4,6 +4,7 @@
     "name": "BrandCast",
     "email": "dev@brandcast.app"
   },
+  "license": "MIT",
   "plugins": [
     {
       "name": "root",

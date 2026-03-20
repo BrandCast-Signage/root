@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 # root init — install templates and run ingestion
 #
 # This is the shell fallback. The primary setup path is /root:init

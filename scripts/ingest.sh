@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 # root ingest — bulk-ingest project docs into the RAG database
 #
 # Usage: root ingest [project-dir]
