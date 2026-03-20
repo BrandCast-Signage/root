@@ -136,6 +136,10 @@ This interactively detects your project structure, asks which directories contai
 /reload-plugins
 ```
 
+## Known Limitations
+
+**RAG ingestion filtering**: `mcp-local-rag` does not support `--exclude` or extension filtering during ingestion. When directories are ingested, all supported files are indexed — including files inside `node_modules/`, `dist/`, etc. The `ingest.sh` script works around this with a post-ingestion cleanup pass that reads `exclude` and `extensions` from `root.config.json` and deletes matching entries from the database. This means ingestion takes longer than it should (ingesting then deleting), but the final database state is correct.
+
 ## Family
 
 Root is part of the BrandCast agent family:

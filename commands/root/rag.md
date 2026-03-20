@@ -24,14 +24,20 @@ Ingest docs into the RAG database from `root.config.json`.
 
 1. Read `root.config.json` → `ingest.include`, `ingest.exclude`, `ingest.extensions`
 2. If no config exists, tell the user to run `/root:init` first and stop
-3. Use Bash to call the mcp-local-rag CLI for each include directory:
+3. For each include directory, use Bash to call the mcp-local-rag CLI:
    ```bash
    RAG_BIN="${HOME}/.root-framework/mcp/node_modules/mcp-local-rag/dist/index.js"
    DB_PATH=$(python3 -c "import json; print(json.load(open('root.config.json')).get('ingest', {}).get('dbPath', '.root/rag-db'))" 2>/dev/null || echo ".root/rag-db")
    node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "${HOME}/.cache/mcp-local-rag/models" ingest <directory>
    ```
-4. Report results:
-   > Ingested **234 files** into RAG.
+4. **Post-ingestion cleanup**: mcp-local-rag has no native exclude or extension filtering.
+   After ingestion, query the database for all ingested file paths, then delete any that
+   match `exclude` patterns (e.g. `**/node_modules/**`) or don't match `extensions` (e.g. `.md`):
+   ```bash
+   node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "${HOME}/.cache/mcp-local-rag/models" delete <filepath>
+   ```
+5. Report results:
+   > Ingested **234 files** into RAG. Removed **12 excluded files**.
 
 ## `refresh`
 

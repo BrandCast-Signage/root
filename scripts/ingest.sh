@@ -3,11 +3,14 @@
 #
 # Usage: root ingest [project-dir]
 #
-# Reads root.config.json → ingest.include/exclude/extensions
-# and ingests matching files using the mcp-local-rag CLI.
+# Reads root.config.json → ingest.include and ingests each directory.
+# Then runs cleanup-rag.sh to remove files matching exclude patterns
+# or not matching allowed extensions (mcp-local-rag has no native
+# filtering support).
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TARGET="${1:-.}"
 TARGET="$(cd "$TARGET" 2>/dev/null && pwd)" || { echo "ERROR: Directory '$1' not found"; exit 1; }
 CONFIG="$TARGET/root.config.json"
@@ -44,7 +47,6 @@ echo "=== Root RAG Ingestion ==="
 echo "Project: $TARGET"
 echo ""
 
-TOTAL=0
 while IFS= read -r dir; do
   full_path="$TARGET/$dir"
   if [[ ! -d "$full_path" ]]; then
@@ -58,3 +60,7 @@ while IFS= read -r dir; do
 done <<< "$INCLUDE_DIRS"
 
 echo "✓ Ingestion complete"
+echo ""
+
+# Post-ingestion cleanup: remove files matching exclude patterns
+"$SCRIPT_DIR/cleanup-rag.sh" "$TARGET"

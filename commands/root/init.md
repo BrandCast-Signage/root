@@ -103,18 +103,18 @@ Note: `init.sh` will skip config generation since `root.config.json` already exi
 
 ### Step 7: Ingest docs into RAG
 
-Use Bash to call the mcp-local-rag CLI to ingest each include directory:
+Use Bash to run the ingest script:
 
 ```bash
-RAG_BIN="${HOME}/.root-framework/mcp/node_modules/mcp-local-rag/dist/index.js"
-DB_PATH=$(python3 -c "import json; print(json.load(open('root.config.json')).get('ingest', {}).get('dbPath', '.root/rag-db'))" 2>/dev/null || echo ".root/rag-db")
-node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "${HOME}/.cache/mcp-local-rag/models" ingest <directory>
+${CLAUDE_PLUGIN_ROOT}/scripts/ingest.sh .
 ```
 
-Run once per include directory from the config.
+This ingests each include directory from the config, then runs a cleanup pass
+to remove files matching `exclude` patterns or not matching `extensions`.
+(mcp-local-rag has no native filtering — cleanup is post-ingestion.)
 
 Report the count when done:
-> Ingested **486 files** into RAG.
+> Ingested **486 files** into RAG. Removed **12 excluded files**.
 
 ### Step 8: Output summary
 
