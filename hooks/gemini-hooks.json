@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${GEMINI_EXTENSION_DIR}/hooks/scripts/ensure-rag.sh",
+            "command": "${extensionPath}/hooks/scripts/ensure-rag.sh",
             "timeout": 300
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${GEMINI_EXTENSION_DIR}/hooks/scripts/track-edits.sh"
+            "command": "${extensionPath}/hooks/scripts/track-edits.sh"
           }
         ]
       },
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${GEMINI_EXTENSION_DIR}/hooks/scripts/track-doc-reads.sh"
+            "command": "${extensionPath}/hooks/scripts/track-doc-reads.sh"
           }
         ]
       }
@@ -36,11 +36,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${GEMINI_EXTENSION_DIR}/hooks/scripts/context-receipt.sh"
+            "command": "${extensionPath}/hooks/scripts/context-receipt.sh"
           },
           {
             "type": "command",
-            "command": "${GEMINI_EXTENSION_DIR}/hooks/scripts/doc-update-check.sh"
+            "command": "${extensionPath}/hooks/scripts/doc-update-check.sh"
           }
         ]
       }

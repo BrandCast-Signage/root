@@ -39,7 +39,7 @@ Root ships as BOTH a Claude Code plugin AND a Gemini CLI extension. Every change
 
 **In harness-specific files:**
 - Claude hooks/configs CAN use `${CLAUDE_PLUGIN_ROOT}`
-- Gemini hooks/configs CAN use `${extensionPath}`
+- Gemini hooks/configs CAN use `${extensionPath}` (NOT `${GEMINI_EXTENSION_DIR}`)
 
 ## Command Naming
 
