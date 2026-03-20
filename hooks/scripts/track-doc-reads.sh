@@ -5,7 +5,7 @@
 # Silent (no stdout output). Advisory only (exit 0).
 
 INPUT=$(cat)
-FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
+FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty')
 
 if [[ -z "$FILE_PATH" ]]; then
   exit 0

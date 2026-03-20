@@ -47,9 +47,8 @@ This interactively detects your project structure, asks which directories contai
 |---------|-------------|
 | `/root:root <task>` | Start a development session — context gathering + planning |
 | `/root:init` | Interactive project setup |
-| `/root:ingest [action]` | Manage RAG embeddings: `ingest`, `refresh`, `status`, `clear` |
-| `/root:doc-context <topic>` | Find relevant docs by topic |
-| `/root:doc-health [mode]` | Audit doc freshness and gaps: `overview`, `stale`, `gaps`, `validate` |
+| `/root:rag [action]` | Manage RAG database: `status`, `ingest`, `refresh`, `clear`, `config` |
+| `/root:docs [action]` | Documentation management: `health`, `search`, `stale`, `gaps`, `validate`, `fix` |
 
 ## Usage
 
@@ -59,10 +58,10 @@ This interactively detects your project structure, asks which directories contai
 /root:root #1234                # Shorthand for issue number
 /root:root reset                # Clear current session
 
-/root:ingest status             # Check RAG database state
-/root:ingest refresh            # Re-ingest all docs after major changes
-/root:doc-context oauth         # Find docs about a topic
-/root:doc-health stale          # Find outdated documentation
+/root:rag status                # Check RAG database state
+/root:rag refresh               # Re-ingest all docs after major changes
+/root:docs search oauth         # Find docs about a topic
+/root:docs stale                # Find outdated documentation
 ```
 
 ### What Root Does
@@ -123,10 +122,9 @@ This interactively detects your project structure, asks which directories contai
 |-----------|------|---------|
 | `root` | Skill (model-invoked) | Workflow entry point — context + planning |
 | `mcp-local-rag` | Skill (model-invoked) | RAG query/ingest guidance |
-| `init` | Command | Interactive project setup |
-| `ingest` | Command | RAG embedding management |
-| `doc-context` | Command | Doc discovery by topic |
-| `doc-health` | Command | Doc health auditing |
+| `root:init` | Command | Interactive project setup |
+| `root:rag` | Command | RAG database management |
+| `root:docs` | Command | Documentation management and health auditing |
 | Session hooks | Hooks | Track edits, doc reads, context receipts |
 | Agent templates | Agents | Team (architect/implementer/reviewer/tester) + specialist (backend/frontend/database/devops) |
 
