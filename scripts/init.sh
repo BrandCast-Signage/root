@@ -47,7 +47,7 @@ for agent in "$PLUGIN_ROOT/agents/"*.md; do
 done
 echo "✓ Agent templates installed"
 
-mkdir -p "$TARGET/$AGENT_DIR/rag-db"
+mkdir -p "$TARGET/.root/rag-db"
 
 # --- Update .gitignore ---
 if [[ -f "$TARGET/.gitignore" ]] && ! grep -q "^\.root/" "$TARGET/.gitignore"; then
