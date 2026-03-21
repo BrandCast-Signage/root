@@ -67,12 +67,28 @@ Rules for inline bash in prompts:
 
 ## TOML Command Files
 
+**Claude** ignores TOML files entirely — it reads the `.md` files directly.
+
+**Gemini** reads the TOML `prompt` field and executes it. The prompt content must be **inline** in the TOML as a multi-line string (triple quotes), NOT a file path reference. Gemini cannot resolve external file references.
+
+Both locations must have identical content:
+- `.md` file — Claude reads this
+- `.toml` file `prompt` field — Gemini reads this
+
+When updating a command, **update both the `.md` and `.toml` files**. They must stay in sync.
+
+TOML format:
+```toml
+name = "root:commandname"
+description = "..."
+
+prompt = """
+[full command prompt content here — same as the .md file]
+"""
+```
+
 Gemini uses: `description`, `prompt`
 Gemini ignores: `name`, `type`
-
-Claude ignores TOML files entirely — it reads the `.md` files directly.
-
-Keep TOML files minimal. The `prompt` path must be correct relative to repo root for Gemini.
 
 ## Version Sync
 
