@@ -49,4 +49,4 @@ The `root` skill (in `skills/root/SKILL.md`) is the main workflow entry point, i
 
 ## Dual-Harness Rules
 
-**BEFORE making any code change, load the `dual-harness` skill** (`skills/dual-harness/SKILL.md`). It contains verified rules for shared vs harness-specific files, environment variables, command naming, CLI usage, and config schemas. Every mistake in this project has come from not checking those rules first.
+**BEFORE making any code change, load the dual-harness rules** (`dev/dual-harness/SKILL.md`). It contains verified rules for shared vs harness-specific files, environment variables, command naming, CLI usage, and config schemas. Every mistake in this project has come from not checking those rules first. This file is NOT shipped to consumers — it lives in `dev/` for Root framework development only.
