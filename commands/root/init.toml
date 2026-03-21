@@ -1,7 +1,7 @@
 name = "root:init"
 description = "Initialize Root framework — detect project structure, configure directories, install templates, ingest docs into RAG"
 
-prompt = """
+prompt = '''
 # /root:init — Project Setup
 
 Interactive setup for the Root development workflow framework. Detects your project structure, asks a few questions, generates config, and ingests your docs into RAG.
@@ -141,4 +141,4 @@ Next:
 - Fill in docMappings/labelMappings in root.config.json as you work
 - Run /root <task> to start your first session
 ```
-"""
+'''

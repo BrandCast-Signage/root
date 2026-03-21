@@ -1,7 +1,7 @@
 name = "root:prd"
 description = "PRD authoring — guided requirements elicitation with code-informed context"
 
-prompt = """
+prompt = '''
 # /root:prd — Guided PRD Authoring
 
 Create, edit, or review Product Requirements Documents through a code-informed interview process.
@@ -195,4 +195,4 @@ List all PRDs in the project.
    | auth-refresh.md | Auth Token Refresh | active | 5 P0, 3 P1 | 2026-03-15 |
    | weather-api.md | Weather Integration | draft | 3 P0, 2 P1 | 2026-03-20 |
    ```
-"""
+'''

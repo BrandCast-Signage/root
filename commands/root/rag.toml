@@ -1,7 +1,7 @@
 name = "root:rag"
 description = "Manage RAG database — status, ingest, refresh, clear, config"
 
-prompt = """
+prompt = '''
 # /root:rag — RAG Database Management
 
 Manage the RAG database that powers doc-aware context in Root.
@@ -129,4 +129,4 @@ Scan the project for directories worth indexing that aren't currently included.
    - Write the updated config back using the Edit tool
    - Run the `ingest` action for the newly added directories only
    - Report: > Added **ops/**, **e2e-tests/** to config. Ingested **15 files**.
-"""
+'''

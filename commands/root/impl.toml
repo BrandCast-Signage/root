@@ -1,7 +1,7 @@
 name = "root:impl"
 description = "Execute an Implementation Plan — parallel groups, validation checkpoints, test generation, issue creation"
 
-prompt = """
+prompt = '''
 # /root:impl — Implementation Plan Executor
 
 Execute an approved Implementation Plan by walking through Execution Groups, validating at checkpoints, generating tests and docs, and producing commits.
@@ -397,4 +397,4 @@ Run final validation and produce commit/PR without re-executing changes. Use whe
 2. Run Step 8 (Generate Documentation)
 3. Run Step 9 (Final Validation)
 4. Run Step 10 (Summary and PR)
-"""
+'''

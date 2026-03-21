@@ -1,7 +1,7 @@
 name = "root:docs"
 description = "Documentation management — health, search, stale, scan, validate, fix, create"
 
-prompt = """
+prompt = '''
 # /root:docs — Documentation Management
 
 Manage and analyze documentation across the full indexed corpus (everything in `root.config.json` → `ingest.include`).
@@ -271,4 +271,4 @@ If `path` is provided, fix only that file or directory. Otherwise, scan all `ing
    ```
 4. Use AskUserQuestion to confirm: "Apply these changes?" with options for All, Preview more, or Cancel
 5. On confirmation, write the frontmatter to each file using the Edit tool
-"""
+'''
