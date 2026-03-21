@@ -18,8 +18,8 @@ Every generated doc must meet these minimum standards. Do NOT write a doc that f
 
 | Type | Required Content |
 |------|-----------------|
-| `service` | Public methods with parameter and return types, side effects (DB writes, external calls, events emitted), error conditions and what triggers them |
-| `api` | Every endpoint (method + path), request body/query params with types, response shape with types, auth requirements, error responses with status codes |
+| `service` | Public methods with parameter and return types. Side-effect inventory: what the service writes to DB, emits via WebSocket, logs, or triggers in other services. Caching strategy: TTL, invalidation triggers, tier differences. Error conditions and what triggers them. |
+| `api` | Mount path (actual URL prefix, not just source file). Every endpoint (method + full path). Request body/query params with types. Response shape with types. Auth requirements. Error responses with status codes. Data resolution order: if a handler reads from multiple sources with fallback, document the priority chain. Side effects: table of downstream effects for mutation endpoints (what gets written, signaled, invalidated). Caching: TTL, tier differences, invalidation triggers if the endpoint delegates to a cached service. Behavioral notes: non-obvious patterns like silent fallbacks, upsert-as-create, rate limiter exceptions. |
 | `package` | Installation/import instructions, configuration options with defaults, key types exported with field descriptions |
 | `module` | Each exported function with parameter types, return types, and a one-line description of behavior |
 
@@ -29,6 +29,9 @@ Every generated doc must meet these minimum standards. Do NOT write a doc that f
 - Empty sections or placeholder text ("TODO", "TBD", "Add description here")
 - Listing function names without describing what they do
 - Omitting error conditions or edge cases that callers need to know about
+- API docs without the mount path (URL prefix where the router is actually served)
+- Mutation endpoints without a side-effect inventory
+- Handlers with multi-source fallback logic without documenting the resolution order
 
 The `scan` and `create` subcommands enforce this rubric. `/root:impl` Step 8 (doc generation) also enforces it.
 

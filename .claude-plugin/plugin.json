@@ -1,7 +1,7 @@
 {
   "name": "root",
   "description": "Development workflow framework — tier-based planning, doc-aware context gathering, RAG-powered search, session tracking, and implementation plan generation",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "author": {
     "name": "BrandCast",
     "email": "dev@brandcast.app"
