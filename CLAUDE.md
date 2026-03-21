@@ -40,10 +40,11 @@ Both harnesses share a per-project RAG database at `.root/rag-db` (relative to c
 | Command | Subcommands |
 |---------|-------------|
 | `root:init` | (interactive setup) |
+| `root:prd` | `new`, `edit`, `review`, `list` |
 | `root:rag` | `status`, `ingest`, `refresh`, `clear`, `config`, `scan` |
 | `root:docs` | `health`, `search`, `stale`, `scan`, `validate`, `fix`, `create` |
 
-The `root` skill (in `skills/root/SKILL.md`) is the main workflow entry point, invoked as `/root:root <task>`.
+The `root` skill (in `skills/root/SKILL.md`) is the main workflow entry point, invoked as `/root <task>`.
 
 ## Dual-Harness Rules
 

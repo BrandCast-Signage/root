@@ -1,0 +1,4 @@
+name = "root:prd"
+description = "PRD authoring — guided requirements elicitation with code-informed context"
+type = "prompt"
+prompt = "commands/root/prd.md"

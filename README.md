@@ -45,18 +45,23 @@ This interactively detects your project structure, asks which directories contai
 
 | Command | Description |
 |---------|-------------|
-| `/root:root <task>` | Start a development session — context gathering + planning |
+| `/root <task>` | Start a development session — context gathering + planning |
 | `/root:init` | Interactive project setup |
+| `/root:prd [action]` | PRD authoring: `new`, `edit`, `review`, `list` |
 | `/root:rag [action]` | Manage RAG database: `status`, `ingest`, `refresh`, `clear`, `config`, `scan` |
 | `/root:docs [action]` | Documentation management: `health`, `search`, `stale`, `scan`, `validate`, `fix`, `create` |
 
 ## Usage
 
 ```
-/root:root fix issue 1132      # Start session from a GitHub issue
-/root:root new auth system      # Start session from a description
-/root:root #1234                # Shorthand for issue number
-/root:root reset                # Clear current session
+/root fix issue 1132      # Start session from a GitHub issue
+/root new auth system      # Start session from a description
+/root #1234                # Shorthand for issue number
+/root reset                # Clear current session
+
+/root:prd new #1234              # Guided PRD creation from an issue
+/root:prd review auth-refresh    # Quality review of a PRD
+/root:prd list                   # List all PRDs in the project
 
 /root:rag status                # Check RAG database state
 /root:rag refresh               # Re-ingest all docs after major changes
@@ -89,7 +94,7 @@ This interactively detects your project structure, asks which directories contai
 | | Tier 1 (Full Process) | Tier 2 (Light Process) |
 |---|---|---|
 | **When** | New features, large refactors, multi-package changes | Bug fixes, small changes, config updates |
-| **Planning** | PRD → Implementation Plan → Human review | Built-in plan mode (ephemeral) |
+| **Planning** | Guided PRD → Implementation Plan → Human review | Built-in plan mode (ephemeral) |
 | **Artifacts** | Persistent plan in `<plansDir>/` | Commit message + PR |
 | **Traceability** | Change Manifest → PRD requirements | GitHub issue/PR linkage |
 
@@ -233,6 +238,7 @@ Override default heuristics for `/root:docs scan`. Each entry maps a glob patter
 | `root` | Skill | Workflow entry point — context + planning |
 | `mcp-local-rag` | Skill | RAG query/ingest guidance |
 | `root:init` | Command | Interactive project setup |
+| `root:prd` | Command | Guided PRD authoring (4 subcommands) |
 | `root:rag` | Command | RAG database management (6 subcommands) |
 | `root:docs` | Command | Documentation management (7 subcommands) |
 | Session hooks | Hooks | Track edits, doc reads, frontmatter enforcement, context receipts |

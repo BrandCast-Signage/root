@@ -135,5 +135,5 @@ RAG: 486 files ingested
 Next:
 - Customize <agent-dir>/agents/specialist-*.md for your stack
 - Fill in docMappings/labelMappings in root.config.json as you work
-- Run /root:root <task> to start your first session
+- Run /root <task> to start your first session
 ```

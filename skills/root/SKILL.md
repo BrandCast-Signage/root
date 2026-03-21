@@ -196,9 +196,10 @@ Read `root.config.json` to get `project.plansDir` and `project.prdsDir`.
 #### Tier 1 path: Implementation Plan
 
 1. **Check for PRD**: Look for a PRD in `<prdsDir>` that matches the issue or task slug.
-   - If no PRD exists, output:
-     > "Tier 1 requires a PRD before the implementation plan. Write the PRD in `<prdsDir>/<slug>.md` first, then re-run `/root`."
-   - Stop. Do not proceed without a PRD.
+   - If no PRD exists, tell the user:
+     > "Tier 1 requires a PRD before the implementation plan. Starting guided PRD authoring."
+   - Run `/root:prd new <task description or issue number>` to guide the user through PRD creation.
+   - After the PRD is written, continue to step 2 below. Do not stop or ask the user to re-run `/root`.
 
 2. **Read the PRD**: Extract the functional requirements (REQ IDs), proposed solution, and technical scope. These drive the Change Manifest.
 
