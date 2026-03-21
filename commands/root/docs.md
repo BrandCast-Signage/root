@@ -207,7 +207,7 @@ Frontmatter schema validation.
 2. For each, read first 20 lines and check:
    - Has `---` delimiters
    - Has `title:` (non-empty)
-   - Has `status:` with valid value: draft, active, completed, superseded, archived
+   - Has `status:` with valid value: draft, active, completed, deferred, cancelled, superseded, archived
    - Has `created:` in YYYY-MM-DD format
    - Has `updated:` in YYYY-MM-DD format
    - `updated` >= `created`

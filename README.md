@@ -135,7 +135,7 @@ updated: 2026-03-10
 |-------|--------|
 | `title` | Non-empty string |
 | `type` | `doc`, `plan`, `prd`, `adr`, `guide`, `spec`, `research`, `service`, `api`, `package`, `module` |
-| `status` | `draft`, `active`, `completed`, `superseded`, `archived` |
+| `status` | `draft`, `active`, `completed`, `deferred`, `cancelled`, `superseded`, `archived` |
 | `created` | `YYYY-MM-DD` |
 | `updated` | `YYYY-MM-DD` (must be >= `created`, no future dates) |
 
