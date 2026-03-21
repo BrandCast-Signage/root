@@ -37,14 +37,14 @@ _Every file in the Change Manifest maps to at least one requirement. Every P0 re
 
 ## Change Manifest
 
-| # | File | Action | Section / Function | Description | Reqs | Group |
-|---|------|--------|--------------------|-------------|------|-------|
-| 1 | `src/types/foo.ts` | modify | `FooConfig` interface | Add `bar` field | REQ-001 | A |
-| 2 | `src/services/fooService.ts` | modify | `processFoo()` | Handle new `bar` field | REQ-001 | A |
-| 3 | `src/routes/foo.ts` | modify | `POST /foo` handler | Validate `bar` in request | REQ-001 | A |
-| 4 | `src/components/FooEditor.tsx` | modify | `FooForm` component | Add bar input field | REQ-002 | B |
+| # | File | Action | Section / Function | Description | Reqs | Group | Status |
+|---|------|--------|--------------------|-------------|------|-------|--------|
+| 1 | `src/types/foo.ts` | modify | `FooConfig` interface | Add optional `bar: string` field to config type | REQ-001 | A | [ ] |
+| 2 | `src/services/fooService.ts` | modify | `processFoo()` | Currently ignores bar. After: reads `config.bar`, validates non-empty, passes to `buildOutput()` | REQ-001 | A | [ ] |
+| 3 | `src/routes/foo.ts` | modify | `POST /foo` handler | Add `bar` to request body schema validation (zod), pass to `processFoo()` | REQ-001 | A | [ ] |
+| 4 | `src/components/FooEditor.tsx` | modify | `FooForm` component | Add `<TextField name="bar" label="Bar" />` to form, wire to form state | REQ-002 | B | [ ] |
 
-_Action: `create` | `modify` | `delete`. Group: letter matching Execution Groups below. This table is the source of truth for task generation._
+_Action: `create` | `modify` | `delete`. Group: letter matching Execution Groups below. Status updated by `/root:impl`: `[ ]` pending, `[~]` in progress, `[x] (<sha>)` complete._
 
 ## Dependency Graph
 
@@ -63,14 +63,16 @@ _Solid arrows = hard dependency (must complete first). Dashed = soft dependency 
 ### Group A: Backend
 **Agent**: `specialist-backend` or `team-implementer`
 **Changes**: #1, #2, #3
-**Sequence**: Types (#1) first → service (#2) → route (#3)
+**Sequence**: Types (#1) → service (#2) → route (#3)
+**Tests**: Create `src/services/__tests__/fooService.test.ts` — test `processFoo()` with bar present, absent, empty string, and invalid type
 
 ### Group B: Frontend
 **Agent**: `specialist-frontend` or `team-implementer`
 **Changes**: #4
 **Depends on**: Group A completing #1 (types). Can start in parallel after #1.
+**Tests**: Create `src/components/__tests__/FooEditor.test.tsx` — test bar field renders, submits value, validates required
 
-_Groups execute in parallel where the dependency graph allows. Tasks are created per group, not per file._
+_Groups execute in parallel where the dependency graph allows. Each group includes test requirements. `/root:impl` drives execution._
 
 ## Coding Standards Compliance
 

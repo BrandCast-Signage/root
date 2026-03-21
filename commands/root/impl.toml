@@ -1,0 +1,4 @@
+name = "root:impl"
+description = "Execute an Implementation Plan — parallel groups, validation checkpoints, test generation, issue creation"
+type = "prompt"
+prompt = "commands/root/impl.md"

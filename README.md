@@ -48,6 +48,7 @@ This interactively detects your project structure, asks which directories contai
 | `/root <task>` | Start a development session — context gathering + planning |
 | `/root:init` | Interactive project setup |
 | `/root:prd [action]` | PRD authoring: `new`, `edit`, `review`, `list` |
+| `/root:impl [action]` | Execute a plan: `run`, `resume`, `status`, `finalize` |
 | `/root:rag [action]` | Manage RAG database: `status`, `ingest`, `refresh`, `clear`, `config`, `scan` |
 | `/root:docs [action]` | Documentation management: `health`, `search`, `stale`, `scan`, `validate`, `fix`, `create` |
 
@@ -62,6 +63,10 @@ This interactively detects your project structure, asks which directories contai
 /root:prd new #1234              # Guided PRD creation from an issue
 /root:prd review auth-refresh    # Quality review of a PRD
 /root:prd list                   # List all PRDs in the project
+
+/root:impl                       # Execute the approved plan
+/root:impl status                # Check implementation progress
+/root:impl resume                # Pick up where you left off
 
 /root:rag status                # Check RAG database state
 /root:rag refresh               # Re-ingest all docs after major changes
@@ -85,9 +90,10 @@ This interactively detects your project structure, asks which directories contai
 5. **Recommends** specialist agents based on config mappings
 6. **Tracks** your session (files edited, docs read)
 7. **Drives planning**:
-   - **Tier 1**: Produces a full Implementation Plan with Change Manifest, Dependency Graph, Execution Groups, and Verification Plan
+   - **Tier 1**: Guided PRD → Implementation Plan with Change Manifest, Dependency Graph, Execution Groups, and Verification Plan
    - **Tier 2**: Uses built-in plan mode for lightweight planning
-8. **Generates tasks** from the plan's Execution Groups
+8. **Executes** via `/root:impl` — parallel agents across Execution Groups, validation checkpoints, test generation, doc creation, and commit/PR
+9. **Or creates issues** — one GitHub issue per Execution Group with linked requirements and cross-references
 
 ### Two-Tier Workflow
 
@@ -239,6 +245,7 @@ Override default heuristics for `/root:docs scan`. Each entry maps a glob patter
 | `mcp-local-rag` | Skill | RAG query/ingest guidance |
 | `root:init` | Command | Interactive project setup |
 | `root:prd` | Command | Guided PRD authoring (4 subcommands) |
+| `root:impl` | Command | Plan execution with parallel agents (4 subcommands) |
 | `root:rag` | Command | RAG database management (6 subcommands) |
 | `root:docs` | Command | Documentation management (7 subcommands) |
 | Session hooks | Hooks | Track edits, doc reads, frontmatter enforcement, context receipts |

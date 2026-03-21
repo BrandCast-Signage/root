@@ -220,7 +220,12 @@ Read `root.config.json` to get `project.plansDir` and `project.prdsDir`.
 
 5. **Update session state**: Set `plan_path` in `/tmp/root-session.json` to the plan file path.
 
-6. **Enter plan mode**: Use `EnterPlanMode` so the user can review and approve the Implementation Plan. Output:
+6. **Ingest the plan into RAG**:
+   ```bash
+   node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" ingest <plan-path>
+   ```
+
+7. **Enter plan mode**: Use `EnterPlanMode` so the user can review and approve the Implementation Plan. Output:
    > "Implementation plan written to `<plansDir>/<slug>.md`. Entering plan mode for review."
 
 #### Tier 2 path: Ephemeral plan via built-in plan mode
@@ -236,24 +241,10 @@ Read `root.config.json` to get `project.plansDir` and `project.prdsDir`.
 
 The plan is ready when the user approves it via plan mode. GitHub issue/PR linkage provides traceability.
 
-### Step 9: Generate task list (after plan approval)
+### Step 9: Hand off to implementation (after plan approval)
 
-After the user approves the plan (exits plan mode), generate a task list.
+After the user approves the plan (exits plan mode), hand off to `/root:impl`:
 
-#### Tier 1: Tasks from Change Manifest
+> "Implementation Plan approved. Run `/root:impl` to begin execution, or `/root:impl status` to review the plan."
 
-Parse the Implementation Plan's Change Manifest and Execution Groups:
-- Create one task per Execution Group (e.g., "Group A: Backend Pipeline — changes #1, #2, #3, #5")
-- Add a verification task: "Run lint/type-check + specific tests from Verification Plan"
-- Add a negative test task if the Verification Plan includes negative tests
-- Add a documentation task if new systems are introduced
-- Add a final task: "Create commit and PR"
-
-#### Tier 2: Standard task template
-
-Create the standard Tier 2 task list:
-1. Understand the issue (read code, trace path)
-2. Fix the issue
-3. Run validation (from `root.config.json` → `validation.lintCommand`)
-4. Run relevant tests
-5. Create commit
+The plan file is the source of truth — `/root:impl` reads the Change Manifest and Execution Groups directly. No intermediate task list is needed.
