@@ -8,6 +8,34 @@ Manage and analyze documentation across the full indexed corpus (everything in `
 
 Parse the first word of the argument to determine the action. Default to `health` if no argument.
 
+## Doc Quality Rubric
+
+Every generated doc must meet these minimum standards. Do NOT write a doc that fails this rubric.
+
+**Every doc MUST include:**
+- **Purpose**: Why this component exists and what problem it solves — not just "handles X" but why X needs handling
+- **Public API surface**: Every exported function, class, type, or endpoint with its signature (name, parameters, return type)
+- **Dependencies**: What this component imports/requires from other parts of the system
+- **Usage example**: A concrete code snippet or curl command showing how to use this component
+
+**By type, additionally:**
+
+| Type | Required Content |
+|------|-----------------|
+| `service` | Public methods with parameter and return types, side effects (DB writes, external calls, events emitted), error conditions and what triggers them |
+| `api` | Every endpoint (method + path), request body/query params with types, response shape with types, auth requirements, error responses with status codes |
+| `package` | Installation/import instructions, configuration options with defaults, key types exported with field descriptions |
+| `module` | Each exported function with parameter types, return types, and a one-line description of behavior |
+
+**NOT acceptable — these will be rejected:**
+- "Handles various operations" or "Provides utility functions" — say which operations, which functions
+- "See source code for details" — the doc IS the details
+- Empty sections or placeholder text ("TODO", "TBD", "Add description here")
+- Listing function names without describing what they do
+- Omitting error conditions or edge cases that callers need to know about
+
+The `scan` and `create` subcommands enforce this rubric. `/root:impl` Step 8 (doc generation) also enforces it.
+
 ## Shared Setup
 
 Subcommands that query the RAG database use these variables. Set them first:
@@ -152,11 +180,7 @@ Generate docs for each selected component.
    updated: <today YYYY-MM-DD>
    ---
    ```
-3. Write first-draft content based on what the code actually does:
-   - **For packages**: purpose, main exports, dependencies, usage examples
-   - **For APIs/routes**: endpoints, request/response shapes, auth requirements
-   - **For services**: responsibility, public methods, dependencies, side effects
-   - **For modules/utils**: exported functions, parameters, return types
+3. Write content that meets the **Doc Quality Rubric** (see top of this file). Read the source code thoroughly — every exported function, every endpoint, every type. The doc must include purpose, full API surface, dependencies, and a usage example. Refer to the rubric's per-type requirements for what else is needed.
 4. Write each file using the Edit tool
 5. Ingest each created doc into the RAG database:
    ```bash
@@ -195,7 +219,7 @@ Create a single doc outside the scan flow.
    updated: <today YYYY-MM-DD>
    ---
    ```
-5. Read source code and write first-draft content with real descriptions of what the code does
+5. Read source code thoroughly and write content that meets the **Doc Quality Rubric** (see top of this file). Every exported function, endpoint, type, and dependency must be documented. Include a usage example.
 6. Write the file
 7. Ingest the new doc into the RAG database:
    ```bash

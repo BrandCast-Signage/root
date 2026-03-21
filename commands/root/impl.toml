@@ -263,10 +263,11 @@ Use AskUserQuestion:
 After all code groups are complete, before final validation:
 
 1. Identify new systems introduced: scan the Change Manifest for `create` actions on source files (not test files)
-2. For each new system, generate a doc:
-   - Read the source code
+2. For each new system, generate a doc that meets the `/root:docs` **Doc Quality Rubric**:
+   - Read the source code thoroughly — every export, endpoint, type, dependency
    - Generate frontmatter (title from component name, type from path inference, status=draft, created/updated=today)
-   - Write first-draft content based on what the code does
+   - Write content with: purpose (why it exists), full public API surface with signatures, dependencies, usage example, and type-specific requirements (see rubric)
+   - NOT acceptable: "Handles various operations", empty sections, omitted error conditions
    - Write to `project.docsDir`
    - Ingest into RAG:
      ```bash
