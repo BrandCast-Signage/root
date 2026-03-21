@@ -10,7 +10,9 @@ Parse the first word of the argument to determine the action. Default to `health
 
 ## Doc Quality Rubric
 
-Every generated doc must meet these minimum standards. Do NOT write a doc that fails this rubric.
+**This rubric is mandatory. Compliance is not optional. A doc that fails this rubric MUST NOT be written.**
+
+Rubric compliance takes priority over turn count, speed, or efficiency. If a required field (mount path, dependency, side effect) is not in the immediate file, you MUST trace the dependency tree — read imports, grep for route registration, follow the chain — until every required field is confirmed. Never guess, never hedge, never defer a required field for later. An incomplete doc is worse than no doc because it creates false confidence.
 
 **Every doc MUST include:**
 - **Purpose**: Why this component exists and what problem it solves — not just "handles X" but why X needs handling
@@ -36,6 +38,16 @@ Every generated doc must meet these minimum standards. Do NOT write a doc that f
 - API docs without the mount path (URL prefix where the router is actually served)
 - Mutation endpoints without a side-effect inventory
 - Handlers with multi-source fallback logic without documenting the resolution order
+
+**Before writing any doc, self-check:**
+1. Did I read the source file AND trace its imports/dependencies?
+2. For APIs: do I know the actual mount path (not just the file path)?
+3. For mutations: have I identified every side effect (DB, WebSocket, cache, email, billing)?
+4. For handlers with fallback logic: have I documented the resolution order?
+5. Does every exported function have its signature documented?
+6. Is there a concrete usage example?
+
+If any answer is "no" or "I'll verify later" — stop and do the research first. Never write the doc until all answers are "yes."
 
 The `scan` and `create` subcommands enforce this rubric. `/root:impl` Step 8 (doc generation) also enforces it.
 
