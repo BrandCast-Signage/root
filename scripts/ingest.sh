@@ -1,17 +1,14 @@
 #!/bin/bash
 # SPDX-License-Identifier: MIT
-# root ingest — bulk-ingest project docs into the RAG database
+# root ingest — bulk-ingest project content into the RAG database
 #
 # Usage: root ingest [project-dir]
 #
-# Reads root.config.json → ingest.include and ingests each directory.
-# Then runs cleanup-rag.sh to remove files matching exclude patterns
-# or not matching allowed extensions (mcp-local-rag has no native
-# filtering support).
+# Reads root.config.json → ingest.docs (full directories) and
+# ingest.sources (specific file patterns) and ingests them.
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TARGET="${1:-.}"
 TARGET="$(cd "$TARGET" 2>/dev/null && pwd)" || { echo "ERROR: Directory '$1' not found"; exit 1; }
 CONFIG="$TARGET/root.config.json"
@@ -36,32 +33,54 @@ if [[ ! -f "$RAG_BIN" ]]; then
   exit 1
 fi
 
-# Parse include directories from config
-INCLUDE_DIRS=$(python3 -c "
-import json
-config = json.load(open('$CONFIG'))
-for d in config.get('ingest', {}).get('include', ['docs/']):
-    print(d.rstrip('/'))
-" 2>/dev/null)
-
 echo "=== Root RAG Ingestion ==="
 echo "Project: $TARGET"
 echo ""
 
+# Ingest doc directories (everything in each directory)
+DOC_DIRS=$(python3 -c "
+import json
+config = json.load(open('$CONFIG'))
+for d in config.get('ingest', {}).get('docs', []):
+    print(d.rstrip('/'))
+" 2>/dev/null)
+
+DOC_COUNT=0
 while IFS= read -r dir; do
+  [[ -z "$dir" ]] && continue
   full_path="$TARGET/$dir"
   if [[ ! -d "$full_path" ]]; then
     echo "SKIP: $dir (not found)"
     continue
   fi
 
-  echo "Ingesting $dir..."
+  echo "Ingesting docs: $dir/"
   $RAG_CMD --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" ingest "$full_path" 2>&1
+  DOC_COUNT=$((DOC_COUNT + 1))
   echo ""
-done <<< "$INCLUDE_DIRS"
+done <<< "$DOC_DIRS"
 
-echo "✓ Ingestion complete"
+# Ingest source file patterns (specific files only)
+SOURCE_PATTERNS=$(python3 -c "
+import json
+config = json.load(open('$CONFIG'))
+for p in config.get('ingest', {}).get('sources', []):
+    print(p)
+" 2>/dev/null)
+
+SRC_COUNT=0
+while IFS= read -r pattern; do
+  [[ -z "$pattern" ]] && continue
+  # Expand glob pattern relative to project root
+  while IFS= read -r file; do
+    [[ -z "$file" ]] && continue
+    if [[ -f "$file" ]]; then
+      echo "Ingesting source: ${file#$TARGET/}"
+      $RAG_CMD --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" ingest "$file" 2>&1
+      SRC_COUNT=$((SRC_COUNT + 1))
+    fi
+  done < <(cd "$TARGET" && find . -path "./$pattern" -type f 2>/dev/null | sed "s|^\\.|$TARGET|")
+done <<< "$SOURCE_PATTERNS"
+
 echo ""
-
-# Post-ingestion cleanup: remove files matching exclude patterns
-"$SCRIPT_DIR/cleanup-rag.sh" "$TARGET"
+echo "✓ Ingestion complete: $DOC_COUNT doc directories + $SRC_COUNT source files"

@@ -121,7 +121,7 @@ NOT:
 node "$RAG_BIN" ingest --db-path "$DB_PATH" ...
 ```
 
-**Known limitation:** The CLI has NO `--exclude` or `--extensions` flags. It ingests everything in a directory recursively. Filtering is done post-ingestion by querying the DB and deleting files that match exclude patterns. See `scripts/cleanup-rag.sh`.
+**Ingestion model:** `root.config.json` uses `ingest.docs` (full directories) and `ingest.sources` (specific file glob patterns). Docs directories are ingested recursively. Source patterns are expanded and ingested file-by-file. No post-ingestion cleanup needed.
 
 **Supported CLI commands:** `ingest`, `query`, `list`, `status`, `delete`, `skills install`
 

@@ -7,9 +7,8 @@
   },
   "ingest": {
     "dbPath": ".root/rag-db",
-    "include": ["docs/", "src/"],
-    "exclude": ["**/node_modules/**", "**/dist/**", "**/build/**", "**/_archive/**"],
-    "extensions": [".md"]
+    "docs": ["docs/"],
+    "sources": ["apps/*/README.md", "packages/*/README.md"]
   },
   "docMappings": [
     { "pattern": "AUTH|OAUTH|SESSION", "agents": ["specialist-backend"], "skills": [] },

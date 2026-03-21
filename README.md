@@ -197,9 +197,8 @@ Specialist agents are templates — customize their expertise areas and key refe
   },
   "ingest": {
     "dbPath": ".root/rag-db",
-    "include": ["docs/", "src/"],
-    "exclude": ["**/node_modules/**", "**/dist/**"],
-    "extensions": [".md"]
+    "docs": ["docs/"],
+    "sources": ["apps/*/README.md", "packages/*/README.md"]
   },
   "docMappings": [
     { "pattern": "AUTH|OAUTH", "agents": ["specialist-backend"], "skills": [] }
@@ -270,8 +269,6 @@ gemini extension update root
 ```
 
 ## Known Limitations
-
-**RAG ingestion filtering**: `mcp-local-rag` does not support `--exclude` or extension filtering during ingestion. When directories are ingested, all supported files are indexed — including files inside `node_modules/`, `dist/`, etc. Root works around this with a post-ingestion cleanup pass that reads `exclude` and `extensions` from `root.config.json` and deletes matching entries from the database. This means ingestion takes longer than it should (ingesting then deleting), but the final database state is correct.
 
 **Session file**: `/tmp/root-session.json` is ephemeral and cleared if the session exceeds 4 hours. It does not persist across terminal restarts.
 

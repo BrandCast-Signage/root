@@ -32,12 +32,13 @@ Use AskUserQuestion to ask where implementation plans and PRDs should go. Offer 
 - Plans default: `<docsDir>/plans` or `docs/plans`
 - PRDs default: `<docsDir>/prds` or `docs/prds`
 
-### Step 4: Select directories to index for RAG
+### Step 4: Select what to index for RAG
 
-List all top-level directories using `ls`, excluding obvious noise:
-- Skip: `node_modules`, `.git`, `dist`, `build`, `.next`, `.claude`, `.gemini`, `coverage`, `__pycache__`, `.venv`, `target`, `vendor`
+Two types of content to index:
 
-Use AskUserQuestion to let the user select which directories to include in RAG indexing. Pre-select directories that look like docs or source code.
+**Docs directories** — ingest everything recursively. Use AskUserQuestion to let the user select from detected directories (from Step 2) plus any other doc-heavy directories. Pre-select the docsDir.
+
+**Source file patterns** — specific files from source repos (e.g., READMEs). Scan for `README.md` files in top-level directories, `apps/*/`, `packages/*/`, etc. Use AskUserQuestion to let the user confirm which patterns to include. Suggest patterns like `apps/*/README.md`, `packages/*/README.md`.
 
 ### Step 5: Generate root.config.json
 
@@ -53,9 +54,8 @@ Write `root.config.json` to the project root using the Write tool. Populate all 
   },
   "ingest": {
     "dbPath": ".root/rag-db",
-    "include": ["<from step 4>"],
-    "exclude": ["**/node_modules/**", "**/dist/**", "**/build/**", "**/_archive/**"],
-    "extensions": [".md"]
+    "docs": ["<from step 4 — doc directories>"],
+    "sources": ["<from step 4 — file patterns>"]
   },
   "docMappings": [],
   "labelMappings": [],
@@ -101,25 +101,26 @@ ${AGENT_DIR_ROOT:-.}/scripts/init.sh .
 
 Note: `init.sh` will skip config generation since `root.config.json` already exists from Step 5.
 
-### Step 7: Ingest docs into RAG
-
-For each include directory, use Bash to call the mcp-local-rag CLI:
+### Step 7: Ingest into RAG
 
 ```bash
 RAG_BIN="${HOME}/.root-framework/mcp/node_modules/mcp-local-rag/dist/index.js"
 DB_PATH=$(python3 -c "import json; print(json.load(open('root.config.json')).get('ingest', {}).get('dbPath', '.root/rag-db'))" 2>/dev/null || echo ".root/rag-db")
-node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "${HOME}/.cache/mcp-local-rag/models" ingest <directory>
+CACHE_DIR="${HOME}/.cache/mcp-local-rag/models"
 ```
 
-Run once per include directory from the config.
+For each directory in `ingest.docs`, ingest the entire directory:
+```bash
+node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" ingest <directory>
+```
 
-After all directories are ingested, run a cleanup pass to remove files matching
-`exclude` patterns or not matching `extensions` from the database. mcp-local-rag
-has no native filtering — this must be done post-ingestion. Use `list_files` to
-get ingested paths, filter against the config rules, then `delete` matches.
+For each pattern in `ingest.sources`, expand using Glob, then ingest each file:
+```bash
+node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" ingest <file>
+```
 
 Report the count when done:
-> Ingested **486 files** into RAG. Removed **12 excluded files**.
+> Ingested **234 docs** + **12 source files** into RAG.
 
 ### Step 8: Output summary
 

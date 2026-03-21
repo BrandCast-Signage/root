@@ -1,6 +1,6 @@
 # /root:docs — Documentation Management
 
-Manage and analyze documentation across the full indexed corpus (everything in `root.config.json` → `ingest.include`).
+Manage and analyze documentation across the full indexed corpus (everything in `root.config.json` → `ingest.docs`).
 
 Parse the first word of the argument to determine the action. Default to `health` if no argument.
 
@@ -18,7 +18,7 @@ CACHE_DIR="${HOME}/.cache/mcp-local-rag/models"
 
 Summary dashboard across the full corpus. Lead with headlines, not lists.
 
-1. Read `root.config.json` → `ingest.include` to identify all doc directories
+1. Read `root.config.json` → `ingest.docs` to identify all doc directories
 2. Use Glob to find all `.md` files across those directories (respecting exclude patterns)
 3. For each file, check:
    - Has frontmatter (opens with `---`)
@@ -72,7 +72,7 @@ Semantic search across the RAG database.
 
 Find outdated documentation, grouped by severity.
 
-1. Find all `.md` files across `ingest.include` directories
+1. Find all `.md` files across `ingest.docs` directories
 2. For each file with an `updated:` date in frontmatter:
    - Calculate days since update
    - Also check `git log -1 --format='%as' -- <file>` for actual last modification
@@ -101,7 +101,7 @@ Identify code components that should have documentation but don't.
    ```
    For each target, Glob for matching files, then check if a corresponding doc exists in the target's `docsDir`.
 
-3. **If no `docTargets`**, use heuristics across `ingest.include` source directories:
+3. **If no `docTargets`**, use heuristics across `ingest.docs` source directories:
    - Directories containing `package.json` → type: `package`
    - Files exporting route handlers (`router.`, `app.get/post/put/delete`, `express.Router()`) → type: `api`
    - Files with class definitions or 5+ named exports → type: `service`
@@ -203,7 +203,7 @@ Create a single doc outside the scan flow.
 
 Frontmatter schema validation.
 
-1. Find all `.md` files across `ingest.include` (excluding README.md)
+1. Find all `.md` files across `ingest.docs` (excluding README.md)
 2. For each, read first 20 lines and check:
    - Has `---` delimiters
    - Has `title:` (non-empty)
@@ -233,7 +233,7 @@ Frontmatter schema validation.
 
 Auto-fix or add frontmatter to docs that lack it.
 
-If `path` is provided, fix only that file or directory. Otherwise, scan all `ingest.include` directories.
+If `path` is provided, fix only that file or directory. Otherwise, scan all `ingest.docs` directories.
 
 1. Find all `.md` files missing frontmatter (no `---` opener) or with incomplete frontmatter
 2. For each file:

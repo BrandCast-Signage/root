@@ -19,14 +19,14 @@ fi
 
 # Frontmatter check for .md files in doc directories
 if [[ "$FILE_PATH" == *.md && -f "root.config.json" ]]; then
-  # Check if this file is in an ingest.include directory
+  # Check if this file is in an ingest.docs directory
   IN_DOC_DIR=false
   while IFS= read -r inc_dir; do
     if [[ "$FILE_PATH" == *"$inc_dir"* ]]; then
       IN_DOC_DIR=true
       break
     fi
-  done < <(python3 -c "import json; [print(d) for d in json.load(open('root.config.json')).get('ingest', {}).get('include', [])]" 2>/dev/null)
+  done < <(python3 -c "import json; [print(d) for d in json.load(open('root.config.json')).get('ingest', {}).get('docs', [])]" 2>/dev/null)
 
   if [[ "$IN_DOC_DIR" == "true" && -f "$FILE_PATH" ]]; then
     FIRST_LINE=$(head -1 "$FILE_PATH")
