@@ -121,7 +121,7 @@ NOT:
 node "$RAG_BIN" ingest --db-path "$DB_PATH" ...
 ```
 
-**Ingestion model:** `root.config.json` uses `ingest.docs` (full directories) and `ingest.sources` (specific file glob patterns). Docs directories are ingested recursively. Source patterns are expanded and ingested file-by-file. No post-ingestion cleanup needed.
+**Ingestion model:** `root.config.json` uses `ingest.docs` (doc directories only). Directories are ingested recursively. Source code directories are NOT ingested — only docs matter for RAG.
 
 **Supported CLI commands:** `ingest`, `query`, `list`, `status`, `delete`, `skills install`
 

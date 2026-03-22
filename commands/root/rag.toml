@@ -31,8 +31,7 @@ Show the current state of the RAG database.
    ```
    RAG Database:
      Documents: 486 | Chunks: 19,041 | Search: hybrid
-     Docs directories: docs/ (all files)
-     Source files: apps/*/README.md, packages/*/README.md
+     Docs: docs/ (all files)
      DB path: .root/rag-db (from root.config.json)
    ```
 
@@ -40,19 +39,14 @@ Show the current state of the RAG database.
 
 Ingest into the RAG database from `root.config.json`.
 
-1. Read `root.config.json` → `ingest.docs` and `ingest.sources`
+1. Read `root.config.json` → `ingest.docs`
 2. If no config exists, tell the user to run `/root:init` first and stop
-3. Run the shared setup, then:
-   - For each directory in `docs`, ingest the entire directory:
-     ```bash
-     node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" ingest <directory>
-     ```
-   - For each glob pattern in `sources`, expand the pattern using Glob, then ingest each matched file:
-     ```bash
-     node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" ingest <file>
-     ```
+3. Run the shared setup, then for each directory in `docs`, ingest the entire directory:
+   ```bash
+   node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" ingest <directory>
+   ```
 4. Report results:
-   > Ingested **234 docs** + **12 source files** into RAG.
+   > Ingested **234 files** into RAG.
 
 ## `refresh`
 
@@ -92,19 +86,18 @@ Show what's being indexed and how to change it.
    ```bash
    node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" list
    ```
-3. Count files on disk matching docs directories and source patterns (use Glob)
+3. Count files on disk in docs directories (use Glob)
 4. Show:
    ```
    RAG Config (root.config.json → ingest):
 
-   Docs (full directories): docs/
-   Sources (specific files): apps/*/README.md, packages/*/README.md
+   Docs: docs/
 
-   On disk: 256 docs + 12 source files
+   On disk: 256 files
    In RAG:  250 indexed documents
-   Delta:   18 files not yet ingested
+   Delta:   6 files not yet ingested
 
-   To modify: edit root.config.json → ingest section
+   To modify: edit root.config.json → ingest.docs
    To apply:  /root:rag refresh
    To discover new directories: /root:rag scan
    ```

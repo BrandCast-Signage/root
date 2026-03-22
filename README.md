@@ -197,8 +197,7 @@ Specialist agents are templates — customize their expertise areas and key refe
   },
   "ingest": {
     "dbPath": ".root/rag-db",
-    "docs": ["docs/"],
-    "sources": ["apps/*/README.md", "packages/*/README.md"]
+    "docs": ["docs/"]
   },
   "docMappings": [
     { "pattern": "AUTH|OAUTH", "agents": ["specialist-backend"], "skills": [] }

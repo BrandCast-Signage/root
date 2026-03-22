@@ -42,7 +42,7 @@ if [[ -f "$CONFIG" ]]; then
     echo "Root: Migrating root.config.json (v${CONFIG_VERSION} → v${CURRENT_CONFIG_VERSION})..."
 
     python3 -c "
-import json, sys
+import json
 
 config_path = '$CONFIG'
 with open(config_path) as f:
@@ -50,19 +50,21 @@ with open(config_path) as f:
 
 version = config.get('configVersion', 0)
 
-# Migration v0/v1 → v2: include/exclude/extensions → docs/sources
+# Migration v0/v1 → v2: use project.docsDir as the sole ingest target
 if version < 2:
     ingest = config.get('ingest', {})
-    if 'include' in ingest:
-        # Move include dirs to docs
-        ingest['docs'] = ingest.pop('include', [])
-        # Remove exclude and extensions — no longer needed
-        ingest.pop('exclude', None)
-        ingest.pop('extensions', None)
-        # sources defaults to empty — user adds patterns as needed
-        if 'sources' not in ingest:
-            ingest['sources'] = []
-        config['ingest'] = ingest
+    docs_dir = config.get('project', {}).get('docsDir', 'docs')
+
+    # Set docs to just the project's docs directory
+    ingest['docs'] = [docs_dir + '/'] if not docs_dir.endswith('/') else [docs_dir]
+
+    # Remove old fields
+    ingest.pop('include', None)
+    ingest.pop('exclude', None)
+    ingest.pop('extensions', None)
+    ingest.pop('sources', None)
+
+    config['ingest'] = ingest
 
 # Set version
 config['configVersion'] = $CURRENT_CONFIG_VERSION
@@ -71,11 +73,8 @@ with open(config_path, 'w') as f:
     json.dump(config, f, indent=2)
     f.write('\n')
 
-print('Root: Config migrated successfully.')
+print('Root: Config migrated. Ingest target: ' + config['ingest']['docs'][0])
 " 2>&1
-
-    # If the model changed, warn about re-ingestion
-    echo "Root: Config updated. Run /root:rag refresh if your RAG database needs re-ingestion."
   fi
 fi
 

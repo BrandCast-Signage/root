@@ -32,13 +32,9 @@ Use AskUserQuestion to ask where implementation plans and PRDs should go. Offer 
 - Plans default: `<docsDir>/plans` or `docs/plans`
 - PRDs default: `<docsDir>/prds` or `docs/prds`
 
-### Step 4: Select what to index for RAG
+### Step 4: Confirm docs directory for RAG
 
-Two types of content to index:
-
-**Docs directories** — ingest everything recursively. Use AskUserQuestion to let the user select from detected directories (from Step 2) plus any other doc-heavy directories. Pre-select the docsDir.
-
-**Source file patterns** — specific files from source repos (e.g., READMEs). Scan for `README.md` files in top-level directories, `apps/*/`, `packages/*/`, etc. Use AskUserQuestion to let the user confirm which patterns to include. Suggest patterns like `apps/*/README.md`, `packages/*/README.md`.
+The docs directory from Step 2 is what gets ingested into RAG. Use AskUserQuestion to confirm and optionally add additional doc directories if the project has docs in multiple locations.
 
 ### Step 5: Generate root.config.json
 
@@ -55,8 +51,7 @@ Write `root.config.json` to the project root using the Write tool. Populate all 
   },
   "ingest": {
     "dbPath": ".root/rag-db",
-    "docs": ["<from step 4 — doc directories>"],
-    "sources": ["<from step 4 — file patterns>"]
+    "docs": ["<from step 4>"]
   },
   "docMappings": [],
   "labelMappings": [],
