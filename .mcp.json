@@ -8,7 +8,7 @@
       "env": {
         "DB_PATH": ".root/rag-db",
         "CACHE_DIR": "${HOME}/.cache/mcp-local-rag/models",
-        "MODEL_NAME": "Xenova/e5-small-v2"
+        "MODEL_NAME": "Xenova/all-MiniLM-L6-v2"
       }
     }
   }
