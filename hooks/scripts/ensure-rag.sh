@@ -50,15 +50,17 @@ with open(config_path) as f:
 
 version = config.get('configVersion', 0)
 
-# Migration v0/v1 → v2: use project.docsDir as the sole ingest target
+# Migration v0/v1 → v2: convert old include to docs, preserve user additions
 if version < 2:
     ingest = config.get('ingest', {})
     docs_dir = config.get('project', {}).get('docsDir', 'docs')
+    docs_entry = docs_dir + '/' if not docs_dir.endswith('/') else docs_dir
 
-    # Set docs to just the project's docs directory
-    ingest['docs'] = [docs_dir + '/'] if not docs_dir.endswith('/') else [docs_dir]
+    # Only set docs if it doesn't already exist (preserve user edits)
+    if 'docs' not in ingest:
+        ingest['docs'] = [docs_entry]
 
-    # Remove old fields
+    # Remove old fields only
     ingest.pop('include', None)
     ingest.pop('exclude', None)
     ingest.pop('extensions', None)
