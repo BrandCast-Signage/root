@@ -1,7 +1,7 @@
 {
   "name": "root",
   "description": "Development workflow framework — tier-based planning, doc-aware context gathering, RAG-powered search, session tracking, and implementation plan generation",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "license": "MIT",
   "commands": "commands/**/*.toml",
   "hooks": "hooks/gemini-hooks.json",
@@ -20,7 +20,8 @@
       ],
       "env": {
         "DB_PATH": ".root/rag-db",
-        "CACHE_DIR": "${HOME}/.cache/mcp-local-rag/models"
+        "CACHE_DIR": "${HOME}/.cache/mcp-local-rag/models",
+        "MODEL_NAME": "Xenova/e5-small-v2"
       }
     }
   }
