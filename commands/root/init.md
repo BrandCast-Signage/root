@@ -46,6 +46,7 @@ Write `root.config.json` to the project root using the Write tool. Populate all 
 
 ```json
 {
+  "configVersion": 2,
   "project": {
     "name": "<detected or specified>",
     "docsDir": "<from step 2>",

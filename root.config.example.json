@@ -1,4 +1,5 @@
 {
+  "configVersion": 2,
   "project": {
     "name": "my-project",
     "docsDir": "docs",
