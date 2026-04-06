@@ -44,6 +44,7 @@ Both harnesses share a per-project RAG database at `.root/rag-db` (relative to c
 | `root:impl` | `run`, `resume`, `status`, `finalize` |
 | `root:rag` | `status`, `ingest`, `refresh`, `clear`, `config`, `scan` |
 | `root:docs` | `health`, `search`, `stale`, `scan`, `validate`, `fix`, `create` |
+| `root:explore` | `topic`, `flow`, `map` |
 
 The `root` skill (in `skills/root/SKILL.md`) is the main workflow entry point, invoked as `/root <task>`.
 
