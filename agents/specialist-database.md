@@ -1,6 +1,6 @@
 ---
 name: specialist-database
-description: "Database and data layer specialist. Customize this agent for your project's database, ORM, migration workflows, and data architecture."
+description: "Use proactively for ANY data-layer work — schema changes, Prisma/ORM edits, new models, migration authoring, query optimization, index design, cascade rules, or data integrity concerns. Trigger words: \"schema\", \"migration\", \"Prisma\", \"SQL\", \"query\", \"model\", \"table\", \"index\", \"column\", \"database\", \"DB\", \"ORM\", \"relation\". Customize this agent for your project's database, ORM, migration workflows, and data architecture."
 model: sonnet
 ---
 

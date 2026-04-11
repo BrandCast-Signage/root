@@ -1,6 +1,6 @@
 ---
 name: specialist-devops
-description: "Infrastructure and CI/CD specialist. Customize this agent for your project's deployment pipeline, container strategy, and environment management."
+description: "Use proactively for ANY infrastructure work — CI/CD pipeline edits, Docker/container changes, Kubernetes manifests, Helm/Fleet/Kustomize, secrets management, environment configuration, or deployment debugging. Trigger words: \"CI\", \"pipeline\", \"GitHub Actions\", \"Docker\", \"Dockerfile\", \"k8s\", \"Kubernetes\", \"deploy\", \"Helm\", \"Fleet\", \"secrets\", \"env vars\", \"infra\", \"cluster\", \"Rancher\". Customize this agent for your project's deployment pipeline, container strategy, and environment management."
 model: sonnet
 ---
 

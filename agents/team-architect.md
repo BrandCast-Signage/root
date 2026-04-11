@@ -1,6 +1,6 @@
 ---
 name: team-architect
-description: Read-only planning and design specialist. Analyzes codebase, identifies files to modify, designs implementation approaches, and flags risks. Always operates in plan mode.
+description: Use proactively for ALL Tier 1 planning work — writing Implementation Plans, tracing code paths, designing approaches, analyzing risk, or producing Change Manifests. Delegate here before any implementation begins. Trigger words: "plan", "design", "architect", "how should we", "trace", "investigate before changing", "figure out what files", "approach for". Read-only; operates in plan mode and hands off to team-implementer for execution.
 model: opus
 ---
 

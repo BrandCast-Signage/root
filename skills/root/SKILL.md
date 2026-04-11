@@ -174,15 +174,19 @@ Example for Tier 1:
 
 ### Workflow (Tier 1)
 1. PRD → Write in <prdsDir>
-2. Implementation Plan → Write in <plansDir> using TEMPLATE.md
+2. Implementation Plan → Delegated to `team-architect` (writes plan, traces code)
 3. Review → Plan mode for human approval
-4. Implement → Task tracking with TodoWrite
-5. Validate → Full quality gate
-6. Document → Update relevant docs
-7. Commit → Zero errors, conventional format
+4. Implement → Delegated to `team-implementer` per Execution Group (parallel worktrees)
+5. Test → Delegated to `team-tester` (per group)
+6. Review → Delegated to `team-reviewer` before commit
+7. Validate → Full quality gate
+8. Document → Update relevant docs
+9. Commit → Zero errors, conventional format
 
-### Next Step
-Write the PRD. Use `team-architect` agent for design.
+### Next Step — MANDATORY
+Tier 1 work MUST run through the agent team. Your next action is:
+1. If no PRD exists: run `/root:prd new <task>` to author one.
+2. Once the PRD exists: spawn `team-architect` via the Agent tool to write the Implementation Plan. Do NOT trace code paths or draft the plan in the main thread — hand the PRD to the architect and wait for plan mode.
 ```
 
 After outputting the summary, proceed to Step 8.
@@ -195,38 +199,32 @@ Read `root.config.json` to get `project.plansDir` and `project.prdsDir`.
 
 #### Tier 1 path: Implementation Plan
 
+**Delegation is mandatory.** The main thread does not write the Implementation Plan or trace code paths — it coordinates the team. Follow this sequence exactly.
+
 1. **Check for PRD**: Look for a PRD in `<prdsDir>` that matches the issue or task slug.
    - If no PRD exists, tell the user:
      > "Tier 1 requires a PRD before the implementation plan. Starting guided PRD authoring."
    - Run `/root:prd new <task description or issue number>` to guide the user through PRD creation.
    - After the PRD is written, continue to step 2 below. Do not stop or ask the user to re-run `/root`.
 
-2. **Read the PRD**: Extract the functional requirements (REQ IDs), proposed solution, and technical scope. These drive the Change Manifest.
+2. **Spawn `team-architect`**: Use the Agent tool with `subagent_type: "team-architect"` and a prompt that:
+   - Points the architect at the PRD file path
+   - Points at `<plansDir>/TEMPLATE.md` as the required format
+   - Points at `root.config.json` for coding standards and validation commands
+   - Lists the agent recommendations from Step 5 as suggested Execution Group owners
+   - Instructs the architect to: trace code paths (it may spawn its own Explore sub-agents), populate the full Implementation Plan (Requirements Traceability, Change Manifest, Dependency Graph, Execution Groups, Coding Standards Compliance, Risk Register, Verification Plan), write it to `<plansDir>/<slug>.md`, and call `ExitPlanMode` when ready for approval
 
-3. **Trace code paths**: Spawn up to 3 Explore agents in parallel. Each agent should:
-   - Trace imports/exports for modules identified in the PRD
-   - Identify all consumers of types/functions that will change
-   - Check cross-package impact
-   - Report: files affected, dependency order, existing patterns to follow
+   **Do NOT trace code paths or draft the plan in the main thread.** The architect owns this work end-to-end. Wait for it to return before proceeding.
 
-4. **Write the Implementation Plan**: Create `<plansDir>/<slug>.md` using the Implementation Plan template (check `<plansDir>/TEMPLATE.md`). Populate:
-   - **Requirements Traceability** from PRD functional requirements
-   - **Change Manifest** from the traced code paths — every file numbered, with action, section/function, description, linked reqs, and execution group
-   - **Dependency Graph** as a Mermaid DAG using Change Manifest numbers (solid = hard dep, dashed = soft)
-   - **Execution Groups** based on package boundaries and agent recommendations from Step 5
-   - **Coding Standards Compliance** checklist — read `codingStandards` from `root.config.json`, plus proactive cleanup items found during tracing
-   - **Risk Register** from cross-package impact analysis
-   - **Verification Plan** with specific test/lint commands from `root.config.json` → `validation`
+3. **Update session state**: After the architect returns with the plan file path, set `plan_path` in `/tmp/root-session.json`.
 
-5. **Update session state**: Set `plan_path` in `/tmp/root-session.json` to the plan file path.
-
-6. **Ingest the plan into RAG**:
+4. **Ingest the plan into RAG**:
    ```bash
    node "$RAG_BIN" --db-path "$DB_PATH" --cache-dir "$CACHE_DIR" ingest <plan-path>
    ```
 
-7. **Enter plan mode**: Use `EnterPlanMode` so the user can review and approve the Implementation Plan. Output:
-   > "Implementation plan written to `<plansDir>/<slug>.md`. Entering plan mode for review."
+5. **Relay plan mode to user**: The architect already called `ExitPlanMode`. Surface the plan to the user for review:
+   > "Implementation plan written to `<plansDir>/<slug>.md` by `team-architect`. Review and approve to proceed to `/root:impl`."
 
 #### Tier 2 path: Ephemeral plan via built-in plan mode
 

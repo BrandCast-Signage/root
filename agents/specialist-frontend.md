@@ -1,6 +1,6 @@
 ---
 name: specialist-frontend
-description: "Frontend UI specialist. Customize this agent for your project's frontend framework, component patterns, state management, and design system."
+description: "Use proactively for ANY UI work — new React/Vue/Svelte components, admin pages, forms, config panels, state management, routing, design-system usage, or data fetching hooks. Trigger words: \"component\", \"UI\", \"page\", \"form\", \"modal\", \"button\", \"admin\", \"React\", \"frontend\", \"design system\", \"style\", \"layout\", \"hook\". Customize this agent for your project's frontend framework, component patterns, state management, and design system."
 model: sonnet
 ---
 

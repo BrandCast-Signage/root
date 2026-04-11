@@ -30,17 +30,21 @@ Every task enters one of two tiers based on scope. The `/root` skill classifies 
 - PRD in `<prdsDir>/<slug>.md` (required before implementation)
 - Implementation Plan in `<plansDir>/<slug>.md`
 
-**Flow**:
+**Flow** (delegation is mandatory — the main thread orchestrates, agents execute):
 
 ```
-1. PRD           → Write PRD (use team-architect agent)
-2. Plan          → /root Step 8 generates Implementation Plan using TEMPLATE.md
+1. PRD           → Write PRD (guided by /root:prd)
+2. Plan          → team-architect writes Implementation Plan using TEMPLATE.md
 3. Human Review  → Plan mode for approval
-4. Implement     → Task tracking from plan's Execution Groups
-5. Validate      → Full quality gate (lint, type-check, tests)
-6. Document      → Update relevant docs
-7. Commit        → Zero errors, conventional commit format
+4. Implement     → team-implementer per Execution Group (parallel worktrees)
+5. Test          → team-tester per Execution Group
+6. Review        → team-reviewer validates against Change Manifest before commit
+7. Validate      → Full quality gate (lint, type-check, tests)
+8. Document      → Update relevant docs
+9. Commit        → Zero errors, conventional commit format
 ```
+
+**Main-thread rule**: You (the team lead) do not edit files, trace code paths, or write production code during Tier 1 work. You coordinate team members, validate their output, and commit approved changes.
 
 **Phase 1: PRD**
 1. Understand the requirement (read existing docs, related code, similar features)
@@ -49,12 +53,11 @@ Every task enters one of two tiers based on scope. The `/root` skill classifies 
 4. Present PRD for human review before proceeding
 
 **Phase 2: Implementation Plan**
-1. `/root` Step 8 spawns Explore agents to trace code paths from the PRD
-2. Implementation Plan written using `<plansDir>/TEMPLATE.md`
+1. `/root` Step 8 spawns `team-architect` via the Agent tool to write the plan
+2. `team-architect` traces code paths (may spawn its own Explore sub-agents), follows `<plansDir>/TEMPLATE.md`, and populates every section
 3. Plan includes: Change Manifest (file-level with requirement traceability), Dependency Graph (Mermaid DAG), Execution Groups (parallel work streams with agent assignments), Coding Standards Compliance, Risk Register, Verification Plan
-4. Enter plan mode for human approval
-5. After approval, `/root` Step 9 generates tasks from the plan's Execution Groups
-6. For deep architectural analysis, optionally spawn `team-architect` agent
+4. `team-architect` calls `ExitPlanMode` for human approval
+5. After approval, `/root:impl` reads the plan's Execution Groups and spawns one `team-implementer` per group
 
 **Phase 3: Human Review Gate**
 - Present the PRD + implementation plan summary
@@ -62,16 +65,18 @@ Every task enters one of two tiers based on scope. The `/root` skill classifies 
 - If changes requested, iterate on plan
 
 **Phase 4: Implementation**
-- Tasks generated from the plan's Execution Groups (one task per group, not per file)
-- Execution Groups define parallel agent assignments — each group can run as a separate agent
+- `/root:impl` spawns one `team-implementer` per Execution Group via the Agent tool with `isolation: "worktree"`
+- Each implementer works in its own isolated worktree, in parallel with other groups where the Dependency Graph allows
+- `team-tester` is spawned alongside each group to author the required tests
+- The main thread does NOT edit files — it monitors task state and validates output
 - Mark tasks in_progress before starting, completed after verification
 - Commit after each logical unit
 
 **Phase 5: Validation**
-- Run lint/type-check (from `root.config.json` → `validation.lintCommand`)
-- Run tests (from `root.config.json` → `validation.testCommand`)
-- Spawn team-reviewer agent for cross-package review
-- All checks must pass
+- Spawn `team-reviewer` to validate every group's changes against the Change Manifest — this is mandatory for Tier 1, not optional
+- `team-reviewer` runs lint/type-check (`root.config.json` → `validation.lintCommand`) and tests (`validation.testCommand`)
+- `team-reviewer` reports PASS or an issue list. Issues block commit until resolved.
+- The main thread commits only after the reviewer reports PASS
 
 **Phase 6: Documentation**
 - Update or create docs for new/changed systems
@@ -128,25 +133,30 @@ Every task enters one of two tiers based on scope. The `/root` skill classifies 
 
 ## Agent Teams
 
-For complex tasks with >2 independent work streams, use Agent Teams. (Tier 1 only.)
+**Agent Teams are the default execution mode for Tier 1 work.** There is no work-stream count gate — every Tier 1 task runs through the team, even single-group plans. The main thread is the team lead; it coordinates but does not implement.
+
+Tier 2 work stays in the main thread (with single-agent delegation via the routing table in your project's CLAUDE.md) — teams add too much overhead for <50 LOC fixes.
 
 ### Team Roles
 
-| Role | Agent | Capabilities |
-|------|-------|-------------|
-| **Architect** | `team-architect` | Read-only, plan mode |
-| **Implementer** | `team-implementer` | Full read/write |
-| **Reviewer** | `team-reviewer` | Read + run checks |
-| **Tester** | `team-tester` | Full read/write |
+| Role | Agent | Capabilities | When spawned |
+|------|-------|-------------|--------------|
+| **Architect** | `team-architect` | Read-only, plan mode | `/root` Step 8 — before any code changes |
+| **Implementer** | `team-implementer` | Full read/write, isolated worktree | `/root:impl` — one per Execution Group, parallel where possible |
+| **Tester** | `team-tester` | Full read/write | Alongside each implementer in a group |
+| **Reviewer** | `team-reviewer` | Read + run checks | After implementation, before commit |
 
 ### Workflow
-1. Create team → Create tasks → Spawn architect first (plan mode)
-2. Review architect's plan → Spawn implementers
-3. Monitor via TaskList → Spawn reviewer after implementation
-4. Only team lead commits after review
+1. `/root` Step 8 spawns `team-architect` → plan mode
+2. User approves plan → `/root:impl` parses Execution Groups
+3. `/root:impl` spawns `team-implementer` + `team-tester` per group, in parallel worktrees where dependencies allow
+4. After each batch, main thread spawns `team-reviewer` to validate against the Change Manifest
+5. Main thread commits only after reviewer reports PASS
 
 ### Rules
-- Architect designs before implementers code
-- One task per teammate at a time
-- TaskList is source of truth
-- Never commit until review passes
+- Architect designs before implementers code — no parallel shortcut
+- Main thread never edits production files during Tier 1 work
+- One Execution Group per teammate at a time
+- TaskList is source of truth for progress
+- Never commit until `team-reviewer` reports PASS
+- If a teammate gets stuck, the main thread asks the user — it does not silently take over the work

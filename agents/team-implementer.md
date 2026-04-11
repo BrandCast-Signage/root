@@ -1,6 +1,6 @@
 ---
 name: team-implementer
-description: Full-capability code implementer. Writes production code following project patterns and quality standards. Use as a teammate for coding tasks.
+description: Use proactively for ALL code-writing work — implementing features, editing files, fixing bugs, refactoring, adding routes, writing components, running migrations. The main thread should delegate to this agent rather than editing files directly. Trigger words: "implement", "add", "build", "write", "fix", "refactor", "edit", "change", "update the code", "make the changes". Full read/write; follows approved Implementation Plans or task specifications.
 model: sonnet
 ---
 

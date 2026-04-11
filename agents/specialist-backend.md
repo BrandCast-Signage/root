@@ -1,6 +1,6 @@
 ---
 name: specialist-backend
-description: "Backend API specialist. Customize this agent for your project's backend stack, middleware, auth patterns, and API conventions."
+description: "Use proactively for ANY backend work — new API routes, middleware changes, auth flows, request validation, background jobs, webhook handlers, or external service integrations. Trigger words: \"API\", \"endpoint\", \"route\", \"middleware\", \"auth\", \"JWT\", \"webhook\", \"background job\", \"cron\", \"Express\", \"server\", \"backend\". Customize this agent for your project's backend stack, middleware, auth patterns, and API conventions."
 model: sonnet
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: team-reviewer
-description: Code review specialist. Validates changes against requirements, checks for anti-patterns, and runs quality checks.
+description: Use proactively after ANY implementation work completes and before committing or opening a PR. Validates changes against the Implementation Plan's Change Manifest, runs lint/type-check/tests, and flags deviations. Trigger words: "review", "validate", "check", "before PR", "before commit", "did I miss anything", "second opinion", "audit". Read + run checks only — never writes production code. Run this BEFORE team lead commits for Tier 1 work.
 model: sonnet
 ---
 

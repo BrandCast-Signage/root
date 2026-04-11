@@ -1,6 +1,6 @@
 ---
 name: team-tester
-description: Test specialist. Creates and updates tests, runs test suites, validates coverage, and ensures test-source sync.
+description: Use proactively whenever production code changes — to author new tests, update existing ones, validate coverage, or fix failing test suites. Trigger words: "test", "tests", "coverage", "vitest", "jest", "playwright", "spec", "write tests for", "missing tests", "test this", "broken tests". Writes tests alongside implementation work; never modifies production code to make it testable. Part of every Tier 1 Execution Group.
 model: sonnet
 ---
 

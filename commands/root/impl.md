@@ -144,12 +144,25 @@ Batch 3: Group E (depends on C and D)
 
 For each batch of parallel-ready groups:
 
-#### Parallel Execution (Claude Code)
+#### Parallel Execution (Claude Code) — MANDATORY for Tier 1
 
-Spawn one agent per group using the Agent tool with `isolation: "worktree"`:
-- Each agent receives: the Execution Group spec, its Change Manifest entries, coding standards, and test requirements
-- Agents work independently in isolated git worktrees
-- When all agents in the batch complete, their worktree changes are available for review
+You MUST spawn one `team-implementer` agent per group using the Agent tool. Do NOT edit files in the main thread. Do NOT execute a group yourself "because it's small". Delegation is the rule, not an optimization.
+
+For each group in the batch, make an Agent tool call with:
+- `subagent_type: "team-implementer"`
+- `isolation: "worktree"` (gives each agent its own git worktree)
+- A self-contained prompt containing:
+  - Path to the plan file and the group letter (so the implementer can re-read it)
+  - The group's Change Manifest entries in full (file paths, actions, sections, descriptions, linked REQ IDs)
+  - The group's test task (file and scenarios)
+  - Coding standards from `root.config.json` → `codingStandards`
+  - Validation commands from `root.config.json` → `validation`
+  - Explicit instruction to mark each Change Manifest entry `[~]` on start and `[x] (<sha>)` on completion
+  - Explicit instruction to commit in conventional format, one commit per logical unit within the group
+
+Where a group has an associated test task, you may spawn `team-tester` in parallel with the implementer (same worktree) OR instruct the implementer to write tests itself — prefer the former for Tier 1 groups with non-trivial test surface.
+
+All agents in a batch run in parallel. Wait for the whole batch before proceeding to the next. When the batch completes, their worktree changes are ready for review in Step 7.
 
 #### Sequential Execution (Gemini CLI)
 
@@ -230,9 +243,18 @@ Update the Change Manifest in the plan file:
 - Change `[~]` to `[x] (<sha>)` for each entry in this group
 - `<sha>` is the first 7 characters of the commit hash
 
-### Step 7: Checkpoint
+### Step 7: Checkpoint + Mandatory Review
 
-After each batch of groups completes, pause for human verification:
+After each batch of groups completes, **spawn `team-reviewer` before presenting the checkpoint to the user**. This is not optional.
+
+Spawn `team-reviewer` with:
+- `subagent_type: "team-reviewer"`
+- A prompt containing: path to the plan file, group letters in this batch, list of commits from the batch, coding standards, validation commands
+- Instruction to validate the batch's changes against the Change Manifest, run lint/type-check/tests, and report PASS or a specific issue list
+
+If the reviewer returns issues, re-spawn the relevant `team-implementer` with the issue list and a directive to fix. Loop until reviewer returns PASS. Do NOT attempt fixes in the main thread.
+
+Once the reviewer returns PASS, present the checkpoint to the user:
 
 ```
 ### Checkpoint: Group(s) <letters> Complete
@@ -242,6 +264,7 @@ Tests added: <list of test files>
 Commits:
   <sha> — <message>
   <sha> — <message>
+Review: PASS (team-reviewer)
 Lint: PASS/FAIL
 Tests: <n> passed, <n> failed
 
@@ -318,10 +341,10 @@ Coding standards: <n>/<n> checked
    - DOCS: any docs created/updated
 
 3. Use AskUserQuestion:
-   - **"Create PR"** — use `gh pr create` with generated title and body
+   - **"Create PR"** — use `gh pr create` with generated title and body (per-batch `team-reviewer` passes already gate this)
    - **"Squash commits and create PR"** — squash all group commits into one, then create PR
    - **"Just commit (no PR)"** — done
-   - **"Review with team-reviewer first"** — suggest spawning team-reviewer agent, then come back to create PR
+   - **"Full-plan reviewer sweep first"** — spawn `team-reviewer` one more time with the entire plan in scope (cross-group consistency, integration concerns) before the PR
 
 ### Tier 2 Execution (simplified)
 
