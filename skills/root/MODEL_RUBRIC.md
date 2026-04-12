@@ -1,6 +1,6 @@
 # Model & Harness Selection Rubric
 
-Reference guide for selecting the right model and harness per workflow phase. Used by `/root` during session init and by `root:board` when suggesting execution group assignments.
+Reference guide for selecting the right model and harness per workflow phase. Used by `/root` during session init and orchestration dispatch, including when suggesting execution group assignments.
 
 ---
 

@@ -4,9 +4,11 @@ description = "Execute an Implementation Plan with validation and test generatio
 prompt = '''
 # /root:impl — Implementation Plan Executor
 
-Execute an approved Implementation Plan by walking through Execution Groups, validating at checkpoints, generating tests and docs, and producing commits.
+Execute an approved Implementation Plan by walking through Execution Groups, validating at checkpoints, generating tests, resolving review, and merging.
 
-Parse the first word of the argument to determine the action. Default to `run` if no argument.
+Parse the first word of the argument to determine the action:
+- A named subcommand (`run`, `resume`, `status`, `finalize`) — execute that subcommand explicitly.
+- An issue number or no argument — **phase-detect** from `board_status` and start at the correct step (see "Phase-Aware Dispatch" below). This is the default and preferred entry point.
 
 ## Shared Setup
 
@@ -24,6 +26,29 @@ Parse the first word of the argument to determine the action. Default to `run` i
 4. **Read the plan file** and determine tier:
    - Has Change Manifest table + Execution Groups → Tier 1
    - Numbered step list without Change Manifest → Tier 2
+
+## Phase-Aware Dispatch (default)
+
+When `/root:impl` is invoked with an issue number or no argument (i.e., no named subcommand), run Shared Setup and then route based on the stream's status:
+
+| Stream status | Starting step | Rationale |
+|---|---|---|
+| `approved` / `implementing` | Step 1 (Parse Plan) | Full run through implementation → validation → PR → merge |
+| `validating` | Step 8 (Generate Documentation) | Implementation complete; finalize docs + validation + PR |
+| `pr-ready` | Step 10c (CI poll) | PR exists; drive CI polling, review resolution, and merge |
+| `queued` / `planning` | Stop with: "Plan not ready. Run `/root #<issue>` to plan first." | Nothing to execute yet |
+| `plan-ready` | Stop with: "Plan awaits approval. Run `/root approve #<issue>`." | Gated — requires human green-light |
+| `merged` / terminal | Stop with: "Stream #<issue> is complete." | Nothing left to do |
+
+This makes `/root:impl` idempotent — re-invoking picks up exactly where the stream left off. The named subcommands (`run`, `resume`, `status`, `finalize`) remain as explicit overrides for unusual cases; phase-aware dispatch is the normal path and is what `/root`'s orchestration loop calls.
+
+### Entering Step 10c standalone (pr-ready)
+
+When dispatching starts at Step 10c, the PR already exists. Look it up first:
+
+1. Read the PR number from the stream record (`board_status` returns `prNumber` and/or `prUrl` after Step 10b stored it).
+2. If the stream doesn't have a PR number (older streams), resolve it: `gh pr list --head <branch> --json number --jq '.[0].number'` using the stream's `worktreeBranch`.
+3. Then execute 10c → 10d → 10e in order, using `autoApprove` from the stream record to decide auto vs manual merge.
 
 ## RAG Setup
 
@@ -501,7 +526,31 @@ CHECKS=$(gh pr checks <pr-number> --json name,state 2>/dev/null || echo "")
 
 **If CI checks exist:** Wait for them to complete (same polling as auto mode). Then read review comments. If review comments found, resolve findings (same as 10d auto) — push fixes, post the resolution comment. Then present merge options (10e manual below).
 
-**If NO CI checks exist:** Post an awaiting-review comment on the PR and stop:
+**If NO CI checks exist:**
+
+This block may be entered once (first PR creation) or repeatedly (each time `/root #<issue>` is re-invoked on a `pr-ready` stream). Behavior is driven by PR state, not entry mode — the same logic handles both cases.
+
+1. **Read full PR state**:
+   ```bash
+   gh pr view <pr-number> --json reviews,comments,author
+   ```
+
+2. **Find the last Root-posted marker**. Scan issue-level comments for the most recent one starting with `## Review Resolution` or `## Ready for Review`. Record its timestamp as `LAST_ROOT_TS` (null if no such comment exists — this is first entry).
+
+3. **Identify new reviewer activity since `LAST_ROOT_TS`**:
+   - Formal PR reviews with `submittedAt > LAST_ROOT_TS` (or all reviews if null)
+   - Issue-level comments with `createdAt > LAST_ROOT_TS`, excluding any whose body starts with `## Ready for Review` or `## Review Resolution`
+
+4. **Dispatch**:
+
+   | New activity | Action |
+   |---|---|
+   | Any review with `state: CHANGES_REQUESTED`, OR substantive reviewer comments | Fall through to Step 10d's resolution logic: read findings, evaluate against the plan, push fixes in a single `fix(<scope>): address PR review findings` commit, post a `## Review Resolution` comment. Then present merge options (10e manual). |
+   | `APPROVED` review with no unresolved review comments | Present merge options (10e manual) directly. |
+   | No new activity AND `LAST_ROOT_TS` is null (first entry) | Post the `## Ready for Review` comment (template below). Output: "PR #&lt;number&gt; created and awaiting review. Re-run `/root #&lt;issue&gt;` when review arrives." Stop. |
+   | No new activity AND `LAST_ROOT_TS` is not null (re-entry, nothing new) | Output: "Stream #&lt;issue&gt; still awaiting review — no new activity since &lt;LAST_ROOT_TS&gt;. Re-run `/root #&lt;issue&gt;` when review arrives." Stop. Do NOT re-post the awaiting-review comment. |
+
+**Ready for Review comment template** (posted once, on first entry):
 
 ```bash
 gh pr comment <pr-number> --body "## Ready for Review
@@ -521,13 +570,7 @@ This PR was created by Root. Implementation was validated by the team:
 - Or merge manually"
 ```
 
-Output to the user:
-```
-PR #<number> created and awaiting review.
-No CI checks configured — posted review instructions on the PR.
-```
-
-**Stop here.** The PR is in the human's hands. They will review, comment, and either merge manually or use `@root` commands if the workflow is installed.
+**Stop** when no new reviewer activity. The PR stays `pr-ready` on the board; re-invoking `/root #<issue>` will re-check for new activity.
 
 **10e (manual, after CI/review resolution). Merge options**
 

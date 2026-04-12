@@ -21,29 +21,56 @@ Root reads project-specific settings from `root.config.json` in the project root
 
 Execute all steps in order. Steps 1-7 run autonomously. Step 8 drives planning (tier-dependent). Step 9 generates tasks after plan approval.
 
-### Step 0: Check for existing session
+### Step 0: Dispatch
 
-Before anything else:
+`/root` is both the task entry point AND the orchestration driver. Re-running `/root #<issue>` is the universal "continue" gesture — every invocation inspects stream state and advances to the next actionable phase.
 
-**If the argument is `reset`:**
-- Call `board_clean` MCP tool to remove completed streams.
-- Output: "Root session cleared."
-- Stop.
+Parse the first token of the argument.
 
-**If an issue number is present in the argument:**
-1. Call the `board_status` MCP tool with that issue number.
-   - If a stream exists AND has a `planPath` value, output: "Existing Root session found for #<issue number> (<tier>). Re-planning from cached context." then skip directly to Step 8 using the board stream's data.
-   - If no stream exists, proceed to Step 1.
+**Reserved orchestration verbs** — if the first token matches one of these, dispatch and stop (no session init):
 
-**Otherwise:** proceed to Step 1.
+| Verb | Action |
+|------|--------|
+| `reset` | Call `board_clean`. Output "Root streams cleared." Stop. Ignore any issue number in the argument. |
+| `list` | Call `board_list`. Output result. Stop. |
+| `status [#issue]` | If issue given, call `board_status`; else `board_list`. Stop. |
+| `sync` | Call `board_sync`. Output result. Stop. Ignore any issue number. |
+| `delete <#issue>` | Requires an issue. Call `board_delete` with issue. Output result. Stop. If no issue is present, reject: "delete requires an issue number." |
+| `clean` | Call `board_clean`. Output result. Stop. Ignore any issue number. |
+| `approve <#issue>` | Requires an issue. Call `board_approve` with issue. Then fall through to phase-aware dispatch below for that issue (approval means "go"). If no issue is present, reject: "approve requires an issue number." |
+| `run [#issue] [--groups A,B]` | If no issue and exactly one active stream exists, use it. If multiple, call `board_list` and ask which. Call `board_sync` first. Then fall through to phase-aware dispatch below. |
+
+**Verb + issue normalization.** When a verb is matched AND an issue number also appears anywhere in the argument, use the issue as the verb's target — regardless of position. This handles natural-language variants like `/root list #1234` (treat as `status #1234` — the user clearly meant that one stream, not the whole list), `/root approve 1234`, `/root delete #42`. If the verb is one that ignores issues (`reset`, `sync`, `clean`), discard the issue with no error.
+
+**Otherwise** — extract an issue number from the argument (formats: `#1234`, `1234`, `issue 1234`, `GH-1234`, `github.com/.../issues/1234`).
+
+If no issue number is found, reject:
+
+> "Root work is issue-anchored. Either pass an issue number (`/root #1234 <description>`) or file one first with `gh issue create`."
+
+Stop.
+
+**Phase-aware dispatch** (we now have an issue number):
+
+1. Call `board_status` with the issue number.
+2. Route based on the stream's status:
+
+| Stream status | Action |
+|---------------|--------|
+| no stream | Proceed to Step 1 (fresh session init). |
+| `queued` / `planning` | Proceed to Step 1 (resume planning). |
+| `plan-ready` | Read `planPath` from the stream record. Output: "Plan at `<planPath>` awaiting approval. Re-run `/root #<issue>` after approving, or `/root approve #<issue>` to green-light now." Stop. |
+| `approved` / `implementing` / `validating` / `pr-ready` | Dispatch `/root:impl #<issue>` (no subcommand — `/root:impl` phase-detects from `board_status` and starts at the correct step: Step 1 for `approved`/`implementing`, Step 8 for `validating`, Step 10c for `pr-ready`). Pass `--groups` if specified. After it returns, call `board_run` to advance state. If the new state is actionable (not `plan-ready` or terminal), re-evaluate this step. |
+| terminal (`merged`, etc.) | Output: "Stream #<issue> is complete (`<status>`)." Stop. |
+
+Only the "no stream" and "planning" branches fall through to Steps 1-8 below. All other actionable branches dispatch to `/root:impl` and loop on re-evaluation until the stream reaches a human gate (`plan-ready`) or terminal state (`merged`).
+
+**`pr-ready` is not terminal.** A stream reaches `pr-ready` when the PR exists but CI may still be pending, review comments may be unresolved, and the merge hasn't happened. Re-invoking `/root #<issue>` drives the stream through Step 10c (CI poll), Step 10d (review resolution), and Step 10e (merge) until it reaches `merged`.
 
 ### Step 1: Parse the argument
 
-Extract from the argument text:
-- **Issue number** — from any format: `#1234`, `issue 1234`, `GH-1234`, bare number, or `github.com/.../issues/1234` URL
-- **Task description** — the remaining text after extracting the issue number
-
-If no argument was provided, ask the user what they're working on and stop.
+The issue number was already extracted in Step 0 (this branch is only reached when an issue number is present). Now extract:
+- **Task description** — the remaining argument text after removing the issue number and any leading reserved verb. This is in-the-moment context/color that augments the issue body.
 
 ### Step 2: Fetch issue context (if issue number found)
 
@@ -104,7 +131,7 @@ For each entry in `keywordMappings`, check if any `keywords` appear in the task 
 
 ### Step 6: Initialize session state
 
-Call `board_start` MCP tool with the issue number. This creates the board stream (or is a no-op if already started by a prior `root:board start`). Then call `board_run` to advance the status from `queued` to `planning`.
+Call `board_start` MCP tool with the issue number. This creates the board stream (or is a no-op if one already exists). Then call `board_run` to advance the status from `queued` to `planning`.
 
 The board stream at `.root/board/<issue>.json` is the sole source of truth for session state. Do NOT write `/tmp/root-session.json`.
 
@@ -134,7 +161,7 @@ Print a structured summary. Example for Tier 2:
 4. Commit → Conventional commit format
 
 ### Next Step
-- **Autonomous**: Run `/root:board run #1132` for autonomous execution.
+- **Autonomous**: Re-run `/root #1132` — it will pick up from the current phase and drive through to PR-ready.
 - **Manual**: Make the change, validate, and commit.
 ```
 
@@ -167,7 +194,7 @@ Example for Tier 1:
 
 ### Next Step — MANDATORY
 Tier 1 work MUST run through the agent team. Your next action is:
-- **Autonomous**: Run `/root:board run #<issue>` to auto-progress through all phases.
+- **Autonomous**: Re-run `/root #<issue>` after plan approval — it will auto-progress through all remaining phases.
 - **Manual**: Run `/root:prd new` then spawn `team-architect`, then `/root:impl`.
 ```
 
@@ -229,7 +256,7 @@ The plan is ready when the user approves it via plan mode. GitHub issue/PR linka
 After the user approves the plan (exits plan mode), hand off to `/root:impl`:
 
 > "Implementation Plan approved.
-> - **Autonomous**: Run `/root:board run #<issue>` to auto-progress to PR.
+> - **Autonomous**: Re-run `/root #<issue>` — it will dispatch `/root:impl` and drive the stream to PR-ready.
 > - **Manual**: Run `/root:impl` to execute step by step, or `/root:impl status` to review the plan."
 
 The plan file is the source of truth — `/root:impl` reads the Change Manifest and Execution Groups directly. No intermediate task list is needed.

@@ -45,8 +45,8 @@ This interactively detects your project structure, asks which directories contai
 
 | Command | Description |
 |---------|-------------|
-| `/root <task>` | Start a development session — context gathering + planning |
-| `/root:board [action]` | Board orchestration: `list`, `start`, `status`, `approve`, `run`, `sync`, `clean` |
+| `/root <task>` | Start a development session, or continue one. Context gathering, planning, and phase-aware orchestration in a single command. |
+| `/root <verb>` | Orchestration verbs: `list`, `status`, `approve`, `run`, `sync`, `delete`, `clean`, `reset` |
 | `/root:init` | Interactive project setup |
 | `/root:prd [action]` | PRD authoring: `new`, `edit`, `review`, `list` |
 | `/root:impl [action]` | Execute a plan: `run`, `resume`, `status`, `finalize` |
@@ -56,18 +56,22 @@ This interactively detects your project structure, asks which directories contai
 
 ## Usage
 
-### Board Orchestration (v2.0)
+### Orchestration (v2.2)
 
-Run multiple features in parallel with autonomous issue-to-PR progression:
+`/root` IS the orchestrator. Running `/root #<issue>` creates a stream on first invocation and advances it on every subsequent invocation — re-running is the universal "continue" gesture.
 
 ```
-/root:board start #42             # Create a work stream for an issue
-/root:board start #58             # Start another — each gets its own worktree
-/root:board run                   # Auto-progress all streams through gates
-/root:board                       # View all active streams and their status
-/root:board approve #42           # Green-light a Tier 1 plan
-/root:board sync                  # Sync local state with GitHub labels
-/root:board clean                 # Tear down merged worktrees
+/root #42                         # Create stream, classify tier, plan. Stops at plan approval.
+/root #42                         # (after approving) Dispatches /root:impl, drives to PR-ready.
+/root #58                         # Start a second stream — each gets its own worktree
+
+/root list                        # View all active streams
+/root status #42                  # Detailed status for one stream
+/root approve #42                 # Green-light a Tier 1 plan AND continue execution
+/root run                         # If one active stream, resume it; else prompt
+/root sync                        # Sync local state with GitHub labels
+/root delete #42                  # Abandon a stream and tear down its worktree
+/root clean                       # Tear down merged worktrees
 ```
 
 **How it works:** Each stream progresses through a state machine (`queued → planning → plan-ready → approved → implementing → validating → pr-ready → merged`). Gates at each transition determine whether to auto-advance or pause for human approval. Tier 2 work (bug fixes) runs fully autonomously to PR. Tier 1 work pauses once for plan approval, then runs autonomously.
@@ -77,10 +81,10 @@ Streams are tracked locally in `.root/board/` and reflected on GitHub issues via
 ### Core Workflow
 
 ```
-/root fix issue 1132      # Start session from a GitHub issue
-/root new auth system      # Start session from a description
-/root #1234                # Shorthand for issue number
-/root reset                # Clear current session
+/root #1132                      # Start session from a GitHub issue
+/root #1132 webhook flaky on retries  # Issue + in-the-moment color
+/root 1234                       # Bare number also works
+/root reset                      # Clear completed streams
 
 /root:prd new #1234              # Guided PRD creation from an issue
 /root:prd review auth-refresh    # Quality review of a PRD
@@ -119,7 +123,7 @@ Streams are tracked locally in `.root/board/` and reflected on GitHub issues via
    - **Tier 1**: Guided PRD → Implementation Plan with Change Manifest, Dependency Graph, Execution Groups, and Verification Plan
    - **Tier 2**: Uses built-in plan mode for lightweight planning
 8. **Executes** via `/root:impl` — parallel agents across Execution Groups, validation checkpoints, test generation, doc creation, and commit/PR
-9. **Or orchestrates** via `/root:board run` — autonomous progression through gates, GitHub label lifecycle, and PR creation with zero human intervention (Tier 2) or one approval (Tier 1)
+9. **Orchestrates** — every re-invocation of `/root #<issue>` advances the stream through its next gate. Tier 2 runs fully autonomously to PR. Tier 1 pauses once for plan approval, then runs autonomously.
 
 ### Two-Tier Workflow
 
@@ -289,8 +293,7 @@ Set any gate to `"human"` to always pause, `"auto"` to always advance, or use `{
 |-----------|------|---------|
 | `root` | Skill | Workflow entry point — context + planning |
 | `mcp-local-rag` | Skill | RAG query/ingest guidance |
-| `mcp-root-board` | MCP Server | Board orchestration — state machine, worktree lifecycle, GitHub integration, gates |
-| `root:board` | Command | Board management (7 subcommands) |
+| `mcp-root-board` | MCP Server | Stream orchestration backend — state machine, worktree lifecycle, GitHub integration, gates. Driven directly by `/root`. |
 | `root:init` | Command | Interactive project setup |
 | `root:prd` | Command | Guided PRD authoring (4 subcommands) |
 | `root:impl` | Command | Plan execution with parallel agents (4 subcommands) |
