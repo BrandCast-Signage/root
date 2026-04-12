@@ -1,3 +1,8 @@
+---
+description: Orchestrate multi-feature work streams with gates, worktrees, and GitHub
+argument-hint: list | start | status | approve | run | sync | delete | clean
+---
+
 # /root:board — Board Orchestration
 
 Manage multi-feature work streams with gate-based auto-progression. Each stream is backed by a GitHub issue, tracked locally, and isolated in its own git worktree.

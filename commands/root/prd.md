@@ -1,3 +1,8 @@
+---
+description: Author PRDs via guided, code-informed requirements elicitation
+argument-hint: new | edit | review | list
+---
+
 # /root:prd — Guided PRD Authoring
 
 Create, edit, or review Product Requirements Documents through a code-informed interview process.

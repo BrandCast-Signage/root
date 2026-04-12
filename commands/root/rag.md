@@ -1,3 +1,8 @@
+---
+description: Manage RAG database — status, ingest, refresh, clear, config, scan
+argument-hint: status | ingest | refresh | clear | config | scan
+---
+
 # /root:rag — RAG Database Management
 
 Manage the RAG database that powers doc-aware context in Root.

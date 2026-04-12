@@ -1,5 +1,5 @@
 name = "root:explore"
-description = "Codebase exploration — topic discovery, flow tracing, component mapping via RAG"
+description = "Explore codebase — topic discovery, flow tracing, component mapping"
 
 prompt = '''
 # /root:explore — Codebase Exploration

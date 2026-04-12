@@ -1,3 +1,8 @@
+---
+description: Explore codebase — topic discovery, flow tracing, component mapping
+argument-hint: topic | flow | map
+---
+
 # /root:explore — Codebase Exploration
 
 Explore and investigate a codebase using RAG-powered discovery. This command is for open-ended understanding — no edits, no commits, no PRs. Just research.

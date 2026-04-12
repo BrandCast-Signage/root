@@ -90,6 +90,35 @@ prompt = """
 Gemini uses: `description`, `prompt`
 Gemini ignores: `name`, `type`
 
+## Command Autocomplete Descriptions
+
+Claude Code and Gemini read the command description from different places:
+
+- **Gemini**: TOML `description` field
+- **Claude**: YAML frontmatter at the top of the `.md` file
+
+Every command `.md` file MUST start with frontmatter:
+```markdown
+---
+description: <same text as TOML description>
+argument-hint: <subcmd1> | <subcmd2> | <subcmd3>
+---
+
+# /root:commandname — Title
+...
+```
+
+The `description` shown in Claude's `/` autocomplete comes from frontmatter. Without it, Claude falls back to the first H1, which is verbose and inconsistent with Gemini's display.
+
+The `argument-hint` appears as a placeholder after the user types the command and a space. Omit it for commands with no subcommands (like `/root:init`).
+
+**Sync rule: description lives in 3 places.** When editing a command description, update all three:
+1. `commands/root/<name>.toml` → `description` (for Gemini)
+2. `commands/root/<name>.md` → frontmatter `description` (for Claude)
+3. The H1 on the first content line of the `.md` (human-readable title in the prompt body)
+
+Keep 1 and 2 identical. The H1 can be a shorter human title.
+
 ## Version Sync
 
 Three files must have the same version on every bump:

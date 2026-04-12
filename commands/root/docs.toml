@@ -1,5 +1,5 @@
 name = "root:docs"
-description = "Documentation management — health, search, stale, scan, validate, fix, create"
+description = "Manage documentation — health, search, stale, scan, validate, fix, create"
 
 prompt = '''
 # /root:docs — Documentation Management

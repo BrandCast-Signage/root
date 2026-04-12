@@ -1,5 +1,5 @@
 name = "root:board"
-description = "Board orchestration — manage multi-feature work streams with gate-based auto-progression, worktree isolation, and GitHub integration"
+description = "Orchestrate multi-feature work streams with gates, worktrees, and GitHub"
 
 prompt = '''
 # /root:board — Board Orchestration

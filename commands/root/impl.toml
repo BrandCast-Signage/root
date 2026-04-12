@@ -1,5 +1,5 @@
 name = "root:impl"
-description = "Execute an Implementation Plan — parallel groups, validation checkpoints, test generation, issue creation"
+description = "Execute an Implementation Plan with validation and test generation"
 
 prompt = '''
 # /root:impl — Implementation Plan Executor

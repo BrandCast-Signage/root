@@ -1,3 +1,8 @@
+---
+description: Execute an Implementation Plan with validation and test generation
+argument-hint: run | resume | status | finalize
+---
+
 # /root:impl — Implementation Plan Executor
 
 Execute an approved Implementation Plan by walking through Execution Groups, validating at checkpoints, generating tests and docs, and producing commits.

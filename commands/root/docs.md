@@ -1,3 +1,8 @@
+---
+description: Manage documentation — health, search, stale, scan, validate, fix, create
+argument-hint: health | search | stale | scan | validate | fix | create
+---
+
 # /root:docs — Documentation Management
 
 Manage and analyze documentation across the full indexed corpus (everything in `root.config.json` → `ingest.docs`).

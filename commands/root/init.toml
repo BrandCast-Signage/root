@@ -1,5 +1,5 @@
 name = "root:init"
-description = "Initialize Root framework — detect project structure, configure directories, install templates, ingest docs into RAG"
+description = "Initialize Root framework — detect structure, configure, ingest docs"
 
 prompt = '''
 # /root:init — Project Setup

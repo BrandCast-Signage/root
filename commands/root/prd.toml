@@ -1,5 +1,5 @@
 name = "root:prd"
-description = "PRD authoring — guided requirements elicitation with code-informed context"
+description = "Author PRDs via guided, code-informed requirements elicitation"
 
 prompt = '''
 # /root:prd — Guided PRD Authoring

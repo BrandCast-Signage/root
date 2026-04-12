@@ -1,3 +1,7 @@
+---
+description: Initialize Root framework — detect structure, configure, ingest docs
+---
+
 # /root:init — Project Setup
 
 Interactive setup for the Root development workflow framework. Detects your project structure, asks a few questions, generates config, and ingests your docs into RAG.
