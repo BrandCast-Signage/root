@@ -23,17 +23,21 @@ Execute all steps in order. Steps 1-7 run autonomously. Step 8 drives planning (
 
 ### Step 0: Check for existing session
 
-Before anything else, check if `/tmp/root-session.json` exists.
+Before anything else:
 
 **If the argument is `reset`:**
-- Delete `/tmp/root-session.json` if it exists
+- If an issue number is present in the argument, call the `board_clean` MCP tool (it removes merged/pr-ready streams; the session will be cleaned on next cycle). If no board stream exists or the MCP server is unavailable, delete `/tmp/root-session.json` if it exists.
 - Output: "Root session cleared."
 - Stop.
 
-**If session file exists AND contains a `plan_path` field:**
-- Read the session file
-- Output: "Existing Root session found for #<issue number> (<tier>). Re-planning from cached context."
-- Skip directly to Step 8. All context (issue, docs, tier, recommendations) is preserved in the session file.
+**If an issue number is present in the argument:**
+1. Call the `board_status` MCP tool with that issue number.
+   - If `board_status` returns a stream AND the stream has a `planPath` value, output: "Existing Root session found for #<issue number> (<tier>). Re-planning from cached context." then skip directly to Step 8 using the board stream's data in place of the session file.
+   - If `board_status` returns "No stream found" or the MCP server is unavailable, fall through to the session file check below.
+
+**Session file fallback (if board check found nothing or MCP unavailable):**
+- Check if `/tmp/root-session.json` exists AND contains a `plan_path` field.
+- If yes: read the file, output "Existing Root session found for #<issue number> (<tier>). Re-planning from cached context.", skip directly to Step 8.
 
 **Otherwise:** proceed to Step 1.
 
@@ -104,6 +108,15 @@ For each entry in `keywordMappings`, check if any `keywords` appear in the task 
 
 ### Step 6: Initialize session state
 
+**Primary path — board MCP:**
+
+If an issue number is available:
+1. Call `board_start` MCP tool with the issue number. This creates the board stream (or is a no-op if already started by a prior `root:board start`).
+2. Call `board_status` to read the current stream.
+3. Update the stream with the session context by calling `board_run` (which will advance the status from `queued` to `planning` if auto-gated). The tier, docs_read, skills_recommended, and agents_recommended are carried in the session file as supplemental context (the board stream is the authoritative lifecycle record).
+
+**Fallback — session file (always write; used when board MCP is unavailable or no issue number):**
+
 Write `/tmp/root-session.json` (overwrite if exists):
 
 ```json
@@ -131,6 +144,7 @@ Write `/tmp/root-session.json` (overwrite if exists):
 - `skills_recommended` and `agents_recommended` come from Step 5 (empty arrays if no matches)
 - `plan_path` is `null` initially — set by Step 8 when a plan is written
 - Other arrays start empty — populated by PostToolUse and Stop hooks during the session
+- The board stream is the preferred source of truth when available. The session file is a fallback for projects without the board MCP server.
 
 ### Step 7: Output kickoff summary
 
@@ -141,6 +155,7 @@ Print a structured summary. Example for Tier 2:
 
 **Tier**: 2 (Light Process) — [brief reason]
 **Issue**: #1132 — Fix auth token refresh loop
+**Stream**: #1132 (planning)
 **Labels**: area:backend, type:bug
 **State**: OPEN
 
@@ -155,6 +170,10 @@ Print a structured summary. Example for Tier 2:
 2. Fix → Make the change
 3. Validate → lint + type-check + relevant tests
 4. Commit → Conventional commit format
+
+### Next Step
+- **Autonomous**: Run `/root:board run #1132` for autonomous execution.
+- **Manual**: Make the change, validate, and commit.
 ```
 
 Example for Tier 1:
@@ -164,6 +183,7 @@ Example for Tier 1:
 
 **Tier**: 1 (Full Process) — [brief reason]
 **Issue**: #1200 — New weather integration
+**Stream**: #1200 (planning)
 **Labels**: area:backend, type:feature
 
 ### Docs Loaded
@@ -185,9 +205,12 @@ Example for Tier 1:
 
 ### Next Step — MANDATORY
 Tier 1 work MUST run through the agent team. Your next action is:
-1. If no PRD exists: run `/root:prd new <task>` to author one.
-2. Once the PRD exists: spawn `team-architect` via the Agent tool to write the Implementation Plan. Do NOT trace code paths or draft the plan in the main thread — hand the PRD to the architect and wait for plan mode.
+- **Autonomous**: Run `/root:board run #<issue>` to auto-progress through all phases.
+- **Manual**: Run `/root:prd new` then spawn `team-architect`, then `/root:impl`.
 ```
+
+- If a board stream exists, include the `**Stream**` line with the issue number and current status. Omit this line if no board stream is available.
+- Omit the autonomous option from the Next Step block if the board MCP server is not available.
 
 After outputting the summary, proceed to Step 8.
 
@@ -216,7 +239,11 @@ Read `root.config.json` to get `project.plansDir` and `project.prdsDir`.
 
    **Do NOT trace code paths or draft the plan in the main thread.** The architect owns this work end-to-end. Wait for it to return before proceeding.
 
-3. **Update session state**: After the architect returns with the plan file path, set `plan_path` in `/tmp/root-session.json`.
+3. **Update session state**: After the architect returns with the plan file path:
+   - Set `plan_path` in `/tmp/root-session.json`.
+   - If a board stream exists, call `board_run` with the issue number to evaluate the plan gate:
+     - If `board_run` returns `{ "status": "ready" }` (auto gate), the stream advances automatically toward `approved`.
+     - If `board_run` returns `{ "status": "blocked" }` (human gate), the stream pauses at `plan-ready` awaiting human approval via `board_approve` or the `root:approved` GitHub label.
 
 4. **Ingest the plan into RAG**:
    ```bash
@@ -236,6 +263,7 @@ Read `root.config.json` to get `project.plansDir` and `project.prdsDir`.
    - No persistent artifact needed — the commit message and PR description serve as source of record
 
 3. **Update session state**: Set `plan_path` to the `.claude/plans/` (or `.gemini/plans/`) file path.
+   - If a board stream exists, call `board_run` with the issue number. For Tier 2 the `plan_approval` gate defaults to `auto`, so the stream will advance automatically.
 
 The plan is ready when the user approves it via plan mode. GitHub issue/PR linkage provides traceability.
 
@@ -243,6 +271,10 @@ The plan is ready when the user approves it via plan mode. GitHub issue/PR linka
 
 After the user approves the plan (exits plan mode), hand off to `/root:impl`:
 
-> "Implementation Plan approved. Run `/root:impl` to begin execution, or `/root:impl status` to review the plan."
+> "Implementation Plan approved.
+> - **Autonomous**: Run `/root:board run #<issue>` to auto-progress to PR.
+> - **Manual**: Run `/root:impl` to execute step by step, or `/root:impl status` to review the plan."
+
+Omit the autonomous option if the board MCP server is not available.
 
 The plan file is the source of truth — `/root:impl` reads the Change Manifest and Execution Groups directly. No intermediate task list is needed.

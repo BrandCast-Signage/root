@@ -1,12 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # SPDX-License-Identifier: MIT
-# NOTE: This script is superseded by ensure-mcp.sh which also installs mcp-root-board
-# and checks gh CLI authentication. New consumers should use ensure-mcp.sh instead.
-# This file is kept for backward compatibility with existing consumers.
-# Ensure RAG database is populated on SessionStart.
-# - First run: installs mcp-local-rag into a unified framework directory
+# Ensure MCP servers are installed and configured on SessionStart.
+# - First run: installs mcp-local-rag and mcp-root-board into a unified framework directory
 # - Migrates root.config.json if schema is outdated
 # - If DB is empty and root.config.json exists: auto-ingests
+# - Checks gh CLI authentication for board GitHub features
 
 # Consumer project root is $PWD (where the user launched the CLI)
 PROJECT_DIR="$PWD"
@@ -18,6 +16,7 @@ PLUGIN_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 # Unified installation directory
 INSTALL_DIR="${HOME}/.root-framework/mcp"
 RAG_BIN="$INSTALL_DIR/node_modules/mcp-local-rag/dist/index.js"
+BOARD_BIN="$INSTALL_DIR/node_modules/mcp-root-board/dist/index.js"
 
 # Current config schema version
 CURRENT_CONFIG_VERSION=2
@@ -35,6 +34,21 @@ if [[ ! -f "$RAG_BIN" ]]; then
     exit 0
   fi
   echo "Root: RAG MCP server installed successfully."
+fi
+
+# --- Install root-board if needed ---
+if [[ ! -f "$BOARD_BIN" ]]; then
+  echo "Root: Installing board MCP server..."
+  mkdir -p "$INSTALL_DIR"
+  cd "$INSTALL_DIR" || exit 1
+  npm init -y --silent 2>/dev/null
+  npm install mcp-root-board --silent 2>&1
+
+  if [[ ! -f "$BOARD_BIN" ]]; then
+    echo "Root: Failed to install mcp-root-board. Try running manually: cd $INSTALL_DIR && npm install mcp-root-board"
+  else
+    echo "Root: Board MCP server installed successfully."
+  fi
 fi
 
 # --- Migrate config if needed ---
@@ -93,4 +107,15 @@ if [[ -f "$CONFIG" ]]; then
     echo "Root: RAG database empty. Auto-ingesting from root.config.json..."
     "$PLUGIN_DIR/scripts/ingest.sh" "$PROJECT_DIR" 2>&1
   fi
+fi
+
+# Check gh CLI authentication (advisory — don't fail the hook)
+if command -v gh &>/dev/null; then
+  if ! gh auth status &>/dev/null 2>&1; then
+    echo "⚠️  gh CLI not authenticated. Board GitHub features (labels, comments, PRs) will be unavailable."
+    echo "   Run: gh auth login"
+  fi
+else
+  echo "⚠️  gh CLI not found. Board GitHub features will be unavailable."
+  echo "   Install: https://cli.github.com"
 fi

@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${extensionPath}/hooks/scripts/ensure-rag.sh",
+            "command": "${extensionPath}/hooks/scripts/ensure-mcp.sh",
             "timeout": 300
           }
         ]

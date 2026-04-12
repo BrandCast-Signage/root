@@ -1,5 +1,14 @@
 {
   "configVersion": 2,
+  "board": {
+    "gates": {
+      "plan_approval": { "tier1": "human", "tier2": "auto" },
+      "reviewer_pass": "auto",
+      "validation": "auto",
+      "pr_creation": "auto"
+    },
+    "maxParallel": 3
+  },
   "project": {
     "name": "my-project",
     "docsDir": "docs",

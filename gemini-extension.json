@@ -1,7 +1,7 @@
 {
   "name": "root",
   "description": "Development workflow framework — tier-based planning, doc-aware context gathering, RAG-powered search, session tracking, and implementation plan generation",
-  "version": "1.7.0",
+  "version": "2.0.0",
   "license": "MIT",
   "commands": "commands/**/*.toml",
   "hooks": "hooks/gemini-hooks.json",
@@ -22,6 +22,15 @@
         "DB_PATH": ".root/rag-db",
         "CACHE_DIR": "${HOME}/.cache/mcp-local-rag/models",
         "MODEL_NAME": "Xenova/all-MiniLM-L6-v2"
+      }
+    },
+    "root-board": {
+      "command": "node",
+      "args": [
+        "${HOME}/.root-framework/mcp/node_modules/mcp-root-board/dist/index.js"
+      ],
+      "env": {
+        "ROOT_DIR": "."
       }
     }
   }

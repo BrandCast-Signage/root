@@ -80,6 +80,21 @@ if [[ -n "$DOCS_EDITED_NAMES" ]]; then
 echo "│ Docs updated: $DOCS_EDITED_NAMES"
 fi
 echo "│ Context delta: $DELTA"
+
+# --- Board status section ---
+BOARD_DIR="$PWD/.root/board"
+if [[ -d "$BOARD_DIR" ]] && compgen -G "$BOARD_DIR/*.json" > /dev/null 2>&1; then
+  echo "│ Board:"
+  for board_file in "$BOARD_DIR"/*.json; do
+    BNUM=$(jq -r '.issue.number // empty' "$board_file" 2>/dev/null)
+    BTITLE=$(jq -r '.issue.title // empty' "$board_file" 2>/dev/null)
+    BSTATUS=$(jq -r '.status // empty' "$board_file" 2>/dev/null)
+    if [[ -n "$BNUM" && -n "$BTITLE" && -n "$BSTATUS" ]]; then
+      printf "│   #%-4s %-32s %s\n" "$BNUM" "$BTITLE" "$BSTATUS"
+    fi
+  done
+fi
+
 echo "└────────────────────────────────────────────────────────────┘"
 
 # --- Write machine-readable PR context ---

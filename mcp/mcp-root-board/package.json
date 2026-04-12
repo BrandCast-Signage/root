@@ -1,0 +1,29 @@
+{
+  "name": "mcp-root-board",
+  "version": "0.1.0",
+  "description": "MCP server for Root framework board orchestration — manages work streams, worktree lifecycle, GitHub integration, and gate-based auto-progression",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/jest": "^29.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "gh": "GitHub CLI — required for issue labels, comments, and PR creation. Install: https://cli.github.com"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

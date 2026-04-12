@@ -6,7 +6,10 @@ Parse the first word of the argument to determine the action. Default to `run` i
 
 ## Shared Setup
 
-1. **Session state**: Read `/tmp/root-session.json`. Extract `tier`, `plan_path`, `issue`.
+1. **Session state**: Determine tier, plan path, and issue using the following priority:
+   - **Board stream (preferred)**: If an issue number is available (from the argument or session file), call `board_status` MCP tool with that issue number. Extract `tier`, `planPath` (use as `plan_path`), and `issue` from the stream. The board stream is the preferred source of truth.
+   - **Fallback — session file**: If `board_status` returns "No stream found", the MCP server is unavailable, or no issue number is known, read `/tmp/root-session.json` and extract `tier`, `plan_path`, `issue`.
+   - If neither source yields a plan path, it will be resolved in step 3 below.
 2. **Project config**: Read `root.config.json`. Extract:
    - `validation.lintCommand` (e.g., `npm run lint && npm run type-check`)
    - `validation.testCommand` (e.g., `npm test -- <pattern>`)
@@ -254,7 +257,11 @@ Spawn `team-reviewer` with:
 
 If the reviewer returns issues, re-spawn the relevant `team-implementer` with the issue list and a directive to fix. Loop until reviewer returns PASS. Do NOT attempt fixes in the main thread.
 
-Once the reviewer returns PASS, present the checkpoint to the user:
+Once the reviewer returns PASS:
+
+- **Board update (if stream exists)**: If a board stream exists and ALL implementation groups are now complete, call `board_run` with the issue number to transition the stream to `validating`. Individual group completion is tracked in the plan file Change Manifest; the board stream status advances only when the full set of groups is done.
+
+Present the checkpoint to the user:
 
 ```
 ### Checkpoint: Group(s) <letters> Complete
@@ -341,8 +348,8 @@ Coding standards: <n>/<n> checked
    - DOCS: any docs created/updated
 
 3. Use AskUserQuestion:
-   - **"Create PR"** — use `gh pr create` with generated title and body (per-batch `team-reviewer` passes already gate this)
-   - **"Squash commits and create PR"** — squash all group commits into one, then create PR
+   - **"Create PR"** — use `gh pr create` with generated title and body (per-batch `team-reviewer` passes already gate this). After PR creation, if a board stream exists call `board_run` with the issue number to transition the stream to `pr-ready` and add the PR URL to the board stream via `board_sync`.
+   - **"Squash commits and create PR"** — squash all group commits into one, then create PR. Same board update applies after creation.
    - **"Just commit (no PR)"** — done
    - **"Full-plan reviewer sweep first"** — spawn `team-reviewer` one more time with the entire plan in scope (cross-group consistency, integration concerns) before the PR
 
