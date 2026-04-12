@@ -35,12 +35,12 @@ Show detailed status for a specific stream, or all streams if no issue specified
 
 ### `approve <issue>`
 
-Green-light a Tier 1 plan for implementation.
+Green-light a Tier 1 plan and immediately begin implementation.
 
 1. Parse the issue number
 2. Call `board_approve` MCP tool with the issue number
-3. Output the result
-4. If successful, suggest: "Approved. Run `/root:board run #<issue>` to begin autonomous implementation."
+3. If successful, output: "Approved. Beginning implementation."
+4. **Immediately continue into the `run` flow** for this issue — do NOT stop and ask the user to run another command. Approval means "go."
 
 ### `run [issue] [--groups A,B]`
 
