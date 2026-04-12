@@ -336,7 +336,7 @@ Root works with both Claude Code and Gemini CLI. The board orchestration layer e
 
 ## Known Limitations
 
-**Session file fallback**: The legacy `/tmp/root-session.json` is still written as a fallback for projects without the board MCP server. It is ephemeral and cleared after 4 hours. Prefer the board (`/root:board`) for persistent state.
+**Board MCP required**: The `mcp-root-board` MCP server must be available for session tracking. It is auto-installed by the `ensure-mcp.sh` session-start hook. Session state is stored per-issue at `.root/board/<issue>.json`.
 
 ## License
 

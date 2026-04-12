@@ -10,12 +10,7 @@ INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty')
 
-# Track doc edits in CDD session state (before TS filter)
-SESSION_FILE="/tmp/root-session.json"
-if [[ "$FILE_PATH" == *docs/dev/app/*.md && -f "$SESSION_FILE" ]]; then
-  REL_PATH=$(echo "$FILE_PATH" | sed 's|.*/docs/dev/app/|docs/dev/app/|')
-  jq --arg p "$REL_PATH" '.docs_edited += [$p] | .docs_edited |= unique' "$SESSION_FILE" > "${SESSION_FILE}.tmp" && mv "${SESSION_FILE}.tmp" "$SESSION_FILE"
-fi
+# Doc edit tracking is handled by the board MCP server via per-stream state files.
 
 # Frontmatter check for .md files in doc directories
 if [[ "$FILE_PATH" == *.md && -f "root.config.json" ]]; then
@@ -65,11 +60,7 @@ fi
 TRACK_FILE="/tmp/claude-session-edits.txt"
 echo "$FILE_PATH" >> "$TRACK_FILE"
 
-# Also update CDD session state
-SESSION_FILE="/tmp/root-session.json"
-if [[ -f "$SESSION_FILE" ]]; then
-  jq --arg p "$FILE_PATH" '.files_edited += [$p] | .files_edited |= unique' "$SESSION_FILE" > "${SESSION_FILE}.tmp" && mv "${SESSION_FILE}.tmp" "$SESSION_FILE"
-fi
+# File edit tracking is handled by the board MCP server via per-stream state files.
 
 # Determine expected test file
 dir=$(dirname "$FILE_PATH")

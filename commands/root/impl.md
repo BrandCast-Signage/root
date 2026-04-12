@@ -6,10 +6,8 @@ Parse the first word of the argument to determine the action. Default to `run` i
 
 ## Shared Setup
 
-1. **Session state**: Determine tier, plan path, and issue using the following priority:
-   - **Board stream (preferred)**: If an issue number is available (from the argument or session file), call `board_status` MCP tool with that issue number. Extract `tier`, `planPath` (use as `plan_path`), and `issue` from the stream. The board stream is the preferred source of truth.
-   - **Fallback — session file**: If `board_status` returns "No stream found", the MCP server is unavailable, or no issue number is known, read `/tmp/root-session.json` and extract `tier`, `plan_path`, `issue`.
-   - If neither source yields a plan path, it will be resolved in step 3 below.
+1. **Session state**: Call `board_status` MCP tool with the issue number. Extract `tier`, `planPath` (as `plan_path`), and `issue` from the board stream. The board stream is the sole source of truth. Do NOT read `/tmp/root-session.json`.
+   - If no plan path is available from the board, it will be resolved in step 3 below.
 2. **Project config**: Read `root.config.json`. Extract:
    - `validation.lintCommand` (e.g., `npm run lint && npm run type-check`)
    - `validation.testCommand` (e.g., `npm test -- <pattern>`)
