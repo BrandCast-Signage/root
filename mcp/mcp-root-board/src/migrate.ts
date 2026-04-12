@@ -31,6 +31,8 @@ export function migrate(state: unknown): StreamState {
         planPath: (raw["planPath"] as string | null) ?? null,
         prdPath: (raw["prdPath"] as string | null) ?? null,
         autoApprove: (raw["autoApprove"] as boolean) ?? false,
+        parentIssue: (raw["parentIssue"] as number | null) ?? null,
+        childIssues: (raw["childIssues"] as number[]) ?? [],
         groups: (raw["groups"] as StreamState["groups"]) ?? {},
         created: (raw["created"] as string) ?? new Date().toISOString(),
         updated: (raw["updated"] as string) ?? new Date().toISOString(),
@@ -42,6 +44,12 @@ export function migrate(state: unknown): StreamState {
       const current = raw as unknown as StreamState;
       if (current.autoApprove === undefined) {
         current.autoApprove = false;
+      }
+      if (current.parentIssue === undefined) {
+        current.parentIssue = null;
+      }
+      if (current.childIssues === undefined) {
+        current.childIssues = [];
       }
       return current;
     }

@@ -32,6 +32,8 @@ function migrate(state) {
                 planPath: raw["planPath"] ?? null,
                 prdPath: raw["prdPath"] ?? null,
                 autoApprove: raw["autoApprove"] ?? false,
+                parentIssue: raw["parentIssue"] ?? null,
+                childIssues: raw["childIssues"] ?? [],
                 groups: raw["groups"] ?? {},
                 created: raw["created"] ?? new Date().toISOString(),
                 updated: raw["updated"] ?? new Date().toISOString(),
@@ -42,6 +44,12 @@ function migrate(state) {
             const current = raw;
             if (current.autoApprove === undefined) {
                 current.autoApprove = false;
+            }
+            if (current.parentIssue === undefined) {
+                current.parentIssue = null;
+            }
+            if (current.childIssues === undefined) {
+                current.childIssues = [];
             }
             return current;
         }

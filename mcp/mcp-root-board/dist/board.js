@@ -138,6 +138,8 @@ function createStream(issue, tier, rootDir) {
         planPath: null,
         prdPath: null,
         autoApprove: false,
+        parentIssue: null,
+        childIssues: [],
         groups: {},
         created: now,
         updated: now,

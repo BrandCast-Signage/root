@@ -60,6 +60,12 @@ describe("createStream", () => {
     expect(typeof state.created).toBe("string");
     expect(typeof state.updated).toBe("string");
   });
+
+  it("includes parentIssue and childIssues defaults", () => {
+    const state = createStream(TEST_ISSUE, "tier2", tmpDir);
+    expect(state.parentIssue).toBeNull();
+    expect(state.childIssues).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -147,6 +153,13 @@ describe("updateStream", () => {
       "Stream for issue #999 does not exist."
     );
   });
+
+  it("can set parentIssue and childIssues", () => {
+    createStream(TEST_ISSUE, "tier2", tmpDir);
+    const updated = updateStream(tmpDir, 42, { parentIssue: 100, childIssues: [201, 202] });
+    expect(updated.parentIssue).toBe(100);
+    expect(updated.childIssues).toEqual([201, 202]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -207,6 +220,36 @@ describe("migrate integration via readStream", () => {
     expect(result.groups).toEqual({});
   });
 
+  it("migrate backfills parentIssue and childIssues for existing streams", () => {
+    getBoardDir(tmpDir); // ensure dir exists
+    const boardDir = path.join(tmpDir, ".root", "board");
+    // Write a current-version stream that is missing the new fields
+    const stateWithoutNewFields = {
+      schemaVersion: SCHEMA_VERSION,
+      issue: { number: 200, title: "Old stream", labels: [], state: "open" },
+      tier: "tier2",
+      status: "queued",
+      branch: "issue-200",
+      worktreePath: null,
+      planPath: null,
+      prdPath: null,
+      autoApprove: false,
+      groups: {},
+      created: "2024-01-01T00:00:00.000Z",
+      updated: "2024-01-01T00:00:00.000Z",
+    };
+    fs.writeFileSync(
+      path.join(boardDir, "200.json"),
+      JSON.stringify(stateWithoutNewFields, null, 2),
+      "utf8"
+    );
+
+    const result = readStream(tmpDir, 200);
+    expect(result).not.toBeNull();
+    expect(result!.parentIssue).toBeNull();
+    expect(result!.childIssues).toEqual([]);
+  });
+
   it("migrate() passes through current-version state unchanged", () => {
     const current: StreamState = {
       schemaVersion: SCHEMA_VERSION,
@@ -217,6 +260,9 @@ describe("migrate integration via readStream", () => {
       worktreePath: "/tmp/wt",
       planPath: "plans/5.md",
       prdPath: null,
+      autoApprove: false,
+      parentIssue: null,
+      childIssues: [],
       groups: { A: { harness: "claude", status: "in-progress", worktreePath: null } },
       created: "2024-01-01T00:00:00.000Z",
       updated: "2024-01-02T00:00:00.000Z",

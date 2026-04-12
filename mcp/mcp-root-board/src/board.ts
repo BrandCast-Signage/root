@@ -103,6 +103,8 @@ export function createStream(issue: IssueContext, tier: Tier, rootDir: string): 
     planPath: null,
     prdPath: null,
     autoApprove: false,
+    parentIssue: null,
+    childIssues: [],
     groups: {},
     created: now,
     updated: now,

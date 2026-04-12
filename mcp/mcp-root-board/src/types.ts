@@ -11,7 +11,8 @@ export type StreamStatus =
   | "validating"
   | "pr-ready"
   | "merged"
-  | "blocked";
+  | "blocked"
+  | "decomposed";
 
 /** Work complexity tier. Tier 1 requires human delegation; Tier 2 can be fully automated. */
 export type Tier = "tier1" | "tier2";
@@ -70,6 +71,10 @@ export interface StreamState {
   prdPath: string | null;
   /** When true, all gates auto-advance regardless of tier or config. */
   autoApprove: boolean;
+  /** Parent issue number if this stream was created from decomposition, or null. */
+  parentIssue: number | null;
+  /** Sub-issue numbers if this stream was decomposed into children. */
+  childIssues: number[];
   /** Map of group ID → assignment details. */
   groups: Record<string, GroupAssignment>;
   /** ISO 8601 timestamp of stream creation. */

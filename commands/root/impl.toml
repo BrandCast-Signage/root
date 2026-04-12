@@ -90,16 +90,81 @@ For Tier 2: parse as a numbered step list. Skip to the Tier 2 section below.
 
 Run the Plan Quality Rubric. If any entry fails, output the failures and stop.
 
-### Step 3: Implement or Create Issues?
+### Step 3: Analyze for Decomposition, then Implement or Create Issues
 
-Use AskUserQuestion to ask the user:
-- **"Implement now"** — proceed to Step 4
-- **"Create GitHub issues"** — create issues and stop (see Issue Creation below)
-- **"Implement some, issue the rest"** — ask which groups to implement vs issue
+#### 3a. Analyze the Dependency Graph
 
-#### Issue Creation Path
+Call `board_analyze_plan` MCP tool with the plan path. This parses the Mermaid dependency graph and identifies disconnected subgraphs — independent concerns that share no hard dependencies.
 
-For each Execution Group that should become an issue:
+If `shouldDecompose` is `true`, the plan contains multiple independent concerns. Present the analysis:
+
+```
+## Decomposition Analysis
+
+This plan contains <N> independent concerns:
+
+Concern 1 (Groups A, B): <node labels>
+  - 8 file changes, REQ-001 through REQ-003
+
+Concern 2 (Group C): <node labels>
+  - 4 file changes, REQ-004, REQ-005
+
+These concerns share no hard dependencies and can be worked independently.
+```
+
+#### 3b. Decision
+
+**If the stream has `autoApprove: true`:**
+- If `shouldDecompose` is true: auto-decompose (see Decomposition Path below). Do NOT ask the user.
+- If `shouldDecompose` is false: auto-implement. Skip to Step 4.
+
+**If the stream does NOT have `autoApprove`:**
+
+Use AskUserQuestion:
+- **"Decompose into separate issues" (shown only if shouldDecompose is true, and marked Recommended)** — each independent concern becomes its own issue and board stream
+- **"Implement now"** — proceed to Step 4 as a single stream
+- **"Create GitHub issues per group"** — create one issue per Execution Group (legacy behavior)
+
+#### Decomposition Path
+
+For each disconnected subgraph identified by the analysis:
+
+1. Build a sub-issue title: `<parent-issue-title>: <primary-group-name>`
+2. Build the sub-issue body:
+   - Change Manifest entries for this subgraph's groups (as a markdown table)
+   - Linked requirements (REQ IDs from those entries)
+   - Reference to the parent issue: "Part of #<parent-number>"
+   - Reference to the full Implementation Plan file
+   - Execution Group details for this subgraph's groups
+3. Create the sub-issue:
+   ```bash
+   gh issue create --title "<title>" --body "<body>"
+   ```
+4. Start a board stream for the sub-issue:
+   - Call `board_start` MCP tool with the new issue number, `parentIssue: <parent-number>`, and `autoApprove` inherited from the parent
+5. Write a sub-plan for the sub-issue:
+   - Extract from the parent plan: only this subgraph's Change Manifest entries, Execution Groups, Dependency Graph subset, Requirements Traceability subset, and Verification Plan items
+   - Copy Coding Standards in full
+   - Write to `<plansDir>/<parent-slug>-<group-slug>.md`
+   - Ingest into RAG
+   - Update the sub-stream's `planPath`
+
+After all sub-issues are created:
+1. Update the parent stream: `status: "decomposed"`, `childIssues: [<sub-issue-numbers>]`
+2. Post a decomposition comment on the parent GitHub issue listing all sub-issues
+3. Output:
+   ```
+   Decomposed into <N> issues:
+     #201 — <parent-title>: Backend (Groups A, B)
+     #202 — <parent-title>: Notifications (Group C)
+
+   Parent #<parent> is now decomposed. Sub-issues will progress independently.
+   ```
+4. If `autoApprove`: immediately begin `board_run` on each sub-issue
+
+#### Legacy Issue Creation Path
+
+For each Execution Group that should become an issue (when user chooses "Create GitHub issues per group"):
 
 1. Build the issue body:
    - Change Manifest entries for this group (as a markdown table)
@@ -112,7 +177,9 @@ For each Execution Group that should become an issue:
    gh issue create --title "Group <letter>: <name>" --body "<body>"
    ```
 3. If the original task had an issue number, add a reference in the body: "Part of #<number>"
-4. After all issues are created, output:
+4. Call `board_start` MCP tool with the new issue number and `parentIssue: <parent-number>`. Inherit `autoApprove` from the parent.
+5. After all issues are created, update the parent stream: `status: "decomposed"`, `childIssues: [<sub-issue-numbers>]`
+6. Output:
    ```
    Created <n> issues:
      #201 — Group A: Backend Pipeline

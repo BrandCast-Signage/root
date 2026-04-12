@@ -5,6 +5,7 @@ const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
 const zod_1 = require("zod");
 const board_js_1 = require("./board.js");
 const gates_js_1 = require("./gates.js");
+const graph_js_1 = require("./graph.js");
 const github_js_1 = require("./github.js");
 const worktree_js_1 = require("./worktree.js");
 // ---------------------------------------------------------------------------
@@ -38,16 +39,35 @@ function formatStreamsTable(streams) {
     if (streams.length === 0) {
         return "No active streams.";
     }
-    const header = ["Issue", "Title", "Status", "Worktree", "Groups"].join("\t");
-    const rows = streams.map((s) => {
-        const issue = `#${s.issue.number}`;
-        const title = s.issue.title.length > 40 ? s.issue.title.slice(0, 37) + "..." : s.issue.title;
-        const status = s.status;
-        const worktree = s.worktreePath ?? "(none)";
-        const groups = Object.keys(s.groups).length > 0 ? Object.keys(s.groups).join(", ") : "(none)";
-        return [issue, title, status, worktree, groups].join("\t");
-    });
-    return [header, ...rows].join("\n");
+    // Separate parents/standalone from children.
+    const childIssueNums = new Set();
+    for (const s of streams) {
+        if (s.parentIssue !== null) {
+            childIssueNums.add(s.issue.number);
+        }
+    }
+    const lines = [];
+    lines.push(["Issue", "Title", "Status", "Worktree"].join("\t"));
+    for (const s of streams) {
+        // Skip children — they're rendered under their parent.
+        if (childIssueNums.has(s.issue.number))
+            continue;
+        const title = s.issue.title.length > 35 ? s.issue.title.slice(0, 32) + "..." : s.issue.title;
+        const worktree = s.worktreePath ?? "—";
+        lines.push(`#${s.issue.number}\t${title}\t${s.status}\t${worktree}`);
+        // Render children indented under this parent.
+        if (s.childIssues.length > 0) {
+            for (const childNum of s.childIssues) {
+                const child = streams.find((c) => c.issue.number === childNum);
+                if (child) {
+                    const childTitle = child.issue.title.length > 33 ? child.issue.title.slice(0, 30) + "..." : child.issue.title;
+                    const childWorktree = child.worktreePath ?? "—";
+                    lines.push(`  #${child.issue.number}\t${childTitle}\t${child.status}\t${childWorktree}`);
+                }
+            }
+        }
+    }
+    return lines.join("\n");
 }
 // ---------------------------------------------------------------------------
 // Tool: board_list
@@ -64,7 +84,8 @@ server.tool("board_list", "List all active work streams on the board.", {}, asyn
 server.tool("board_start", "Start a new work stream for a GitHub issue. Fetches issue context, creates a stream record, and sets up a git worktree.", {
     issue: zod_1.z.number().int().positive().describe("GitHub issue number"),
     autoApprove: zod_1.z.boolean().optional().describe("When true, all gates auto-advance — fully autonomous even for Tier 1"),
-}, async ({ issue, autoApprove }) => {
+    parentIssue: zod_1.z.number().int().positive().optional().describe("Parent issue number if this stream is a decomposed sub-issue"),
+}, async ({ issue, autoApprove, parentIssue }) => {
     // Fetch issue context from GitHub.
     const issueData = (0, github_js_1.getIssue)(issue);
     const issueContext = {
@@ -75,9 +96,24 @@ server.tool("board_start", "Start a new work stream for a GitHub issue. Fetches 
     };
     // Create the stream (default tier1 — tier is classified later by /root skill).
     const stream = (0, board_js_1.createStream)(issueContext, "tier1", rootDir);
-    // Set auto-approve if requested.
+    // Set auto-approve and parent linkage if provided.
+    const updates = {};
     if (autoApprove) {
-        (0, board_js_1.updateStream)(rootDir, issue, { autoApprove: true });
+        updates.autoApprove = true;
+    }
+    if (parentIssue !== undefined) {
+        updates.parentIssue = parentIssue;
+        // Add this child to the parent's childIssues array.
+        const parent = (0, board_js_1.readStream)(rootDir, parentIssue);
+        if (parent !== null) {
+            const children = parent.childIssues.includes(issue)
+                ? parent.childIssues
+                : [...parent.childIssues, issue];
+            (0, board_js_1.updateStream)(rootDir, parentIssue, { childIssues: children });
+        }
+    }
+    if (Object.keys(updates).length > 0) {
+        (0, board_js_1.updateStream)(rootDir, issue, updates);
     }
     // Build branch name: feat/<issue>-<slugified-title>
     const branchName = `feat/${issue}-${slugify(issueData.title)}`;
@@ -189,6 +225,40 @@ server.tool("board_run", "Evaluate gates and determine the next action for a wor
             content: [{ type: "text", text: `No stream found for #${issue}` }],
         };
     }
+    // Handle decomposed parents: check child status instead of own state machine.
+    if (stream.status === "decomposed") {
+        const childStatuses = [];
+        let allDone = true;
+        for (const childNum of stream.childIssues) {
+            const child = (0, board_js_1.readStream)(rootDir, childNum);
+            if (child) {
+                childStatuses.push(`#${childNum}: ${child.status}`);
+                if (child.status !== "pr-ready" && child.status !== "merged") {
+                    allDone = false;
+                }
+            }
+        }
+        if (allDone && stream.childIssues.length > 0) {
+            const allMerged = stream.childIssues.every((cn) => {
+                const c = (0, board_js_1.readStream)(rootDir, cn);
+                return c?.status === "merged";
+            });
+            const newStatus = allMerged ? "merged" : "pr-ready";
+            (0, board_js_1.updateStream)(rootDir, issue, { status: newStatus });
+            return {
+                content: [{
+                        type: "text",
+                        text: JSON.stringify({ status: "ready", nextPhase: newStatus, action: `All child issues complete. Parent advanced to ${newStatus}.` }, null, 2),
+                    }],
+            };
+        }
+        return {
+            content: [{
+                    type: "text",
+                    text: JSON.stringify({ status: "decomposed", children: childStatuses, action: "Parent is decomposed. Child issues are still in progress." }, null, 2),
+                }],
+        };
+    }
     const transition = (0, gates_js_1.getNextTransition)(stream.status);
     if (transition === null) {
         return {
@@ -285,6 +355,22 @@ server.tool("board_sync", "Sync all stream statuses with GitHub — detects labe
         catch {
             // gh not available or issue not found — skip this stream.
         }
+        // Parent completion tracking: if decomposed, check all children.
+        if (stream.status === "decomposed" && stream.childIssues.length > 0) {
+            const allDone = stream.childIssues.every((cn) => {
+                const child = (0, board_js_1.readStream)(rootDir, cn);
+                return child?.status === "pr-ready" || child?.status === "merged";
+            });
+            if (allDone) {
+                const allMerged = stream.childIssues.every((cn) => {
+                    const child = (0, board_js_1.readStream)(rootDir, cn);
+                    return child?.status === "merged";
+                });
+                const newStatus = allMerged ? "merged" : "pr-ready";
+                (0, board_js_1.updateStream)(rootDir, issueNum, { status: newStatus });
+                changes.push(`#${issueNum}: parent advanced to ${newStatus} (all children complete)`);
+            }
+        }
     }
     const summary = changes.length > 0 ? changes.join("\n") : "No changes detected.";
     return { content: [{ type: "text", text: summary }] };
@@ -318,12 +404,90 @@ server.tool("board_delete", "Delete a work stream and its worktree. Use when aba
             // Non-fatal.
         }
     }
+    // Cascade: delete child streams if this is a parent.
+    let childrenDeleted = 0;
+    if (stream.childIssues.length > 0) {
+        for (const childNum of stream.childIssues) {
+            const child = (0, board_js_1.readStream)(rootDir, childNum);
+            if (child) {
+                if (child.worktreePath !== null) {
+                    try {
+                        (0, worktree_js_1.removeWorktree)(rootDir, child.worktreePath);
+                    }
+                    catch { /* ignore */ }
+                }
+                for (const label of rootLabels) {
+                    try {
+                        (0, github_js_1.removeLabel)(childNum, label);
+                    }
+                    catch { /* ignore */ }
+                }
+                (0, board_js_1.deleteStream)(rootDir, childNum);
+                childrenDeleted++;
+            }
+        }
+    }
+    // If this is a child, remove it from the parent's childIssues.
+    if (stream.parentIssue !== null) {
+        const parent = (0, board_js_1.readStream)(rootDir, stream.parentIssue);
+        if (parent !== null) {
+            (0, board_js_1.updateStream)(rootDir, stream.parentIssue, {
+                childIssues: parent.childIssues.filter((n) => n !== issue),
+            });
+        }
+    }
     // Delete the stream file.
     (0, board_js_1.deleteStream)(rootDir, issue);
+    const msg = childrenDeleted > 0
+        ? `Stream #${issue} deleted (+ ${childrenDeleted} child stream${childrenDeleted === 1 ? "" : "s"}). Worktrees and labels cleaned up.`
+        : `Stream #${issue} deleted. Worktree and labels cleaned up.`;
     return {
-        content: [
-            { type: "text", text: `Stream #${issue} deleted. Worktree and labels cleaned up.` },
-        ],
+        content: [{ type: "text", text: msg }],
+    };
+});
+// ---------------------------------------------------------------------------
+// Tool: board_analyze_plan
+// ---------------------------------------------------------------------------
+server.tool("board_analyze_plan", "Analyze an Implementation Plan's dependency graph for independent concerns. Returns subgraph analysis indicating whether decomposition is recommended.", {
+    planPath: zod_1.z.string().describe("Path to the Implementation Plan markdown file"),
+}, async ({ planPath }) => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const resolved = path.resolve(rootDir, planPath);
+    if (!fs.existsSync(resolved)) {
+        return {
+            content: [{ type: "text", text: `Plan file not found: ${planPath}` }],
+        };
+    }
+    const markdown = fs.readFileSync(resolved, "utf8");
+    const mermaidBlock = (0, graph_js_1.extractMermaidBlock)(markdown);
+    if (mermaidBlock === null) {
+        return {
+            content: [{
+                    type: "text",
+                    text: JSON.stringify({
+                        shouldDecompose: false,
+                        reason: "No Mermaid dependency graph found in the plan. Cannot analyze for decomposition.",
+                        subgraphs: [],
+                    }, null, 2),
+                }],
+        };
+    }
+    const analysis = (0, graph_js_1.analyzeGraph)(mermaidBlock);
+    const subgraphSummaries = analysis.subgraphs.map((sg) => ({
+        groups: sg.groups,
+        nodes: sg.nodes.map((n) => n.label),
+        nodeCount: sg.nodes.length,
+    }));
+    const result = {
+        shouldDecompose: analysis.shouldDecompose,
+        reason: analysis.shouldDecompose
+            ? `Plan contains ${analysis.subgraphs.length} independent concerns (disconnected subgraphs in the dependency graph). Decomposition recommended.`
+            : "Plan is a single coherent concern (fully connected dependency graph). No decomposition needed.",
+        subgraphs: subgraphSummaries,
+    };
+    return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
     };
 });
 // ---------------------------------------------------------------------------
