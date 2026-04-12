@@ -423,66 +423,47 @@ gh pr create --title "<title>" --body "<body with Closes #<issue>>"
 
 After creation, call `board_run` to transition the stream to `pr-ready`.
 
-#### 10c. Wait for CI checks and review
+#### 10c-10e: CI, Review Resolution, and Merge
 
-After the PR is created, check whether CI checks are running. If no checks exist, skip directly to 10e (merge).
+The post-PR flow depends on mode (`autoApprove` vs manual) and whether CI checks exist.
+
+---
+
+**Auto mode (`autoApprove: true`):**
+
+**10c (auto). Wait for CI checks**
 
 ```bash
 # Check if any CI checks exist for this PR
 CHECKS=$(gh pr checks <pr-number> --json name,state 2>/dev/null || echo "")
 ```
 
-**If no checks exist** (empty response, or `gh pr checks` fails): No CI is configured for this repo. Skip to Step 10e (merge). Do NOT poll or wait — there is nothing to wait for.
+If no checks exist: skip to 10e (merge). No CI configured — nothing to wait for.
 
-**If checks exist**, wait for them to complete:
-
+If checks exist, wait for completion:
 ```bash
-# Poll for check completion (timeout after 5 minutes)
 gh pr checks <pr-number> --watch --fail-fast
 ```
+If `--watch` is unavailable, poll: run `gh pr checks <pr-number> --json state` every 10 seconds, up to 30 iterations (5 min timeout).
 
-If `gh pr checks --watch` is not available, poll manually:
-```bash
-# Loop until all checks complete or timeout
-for i in $(seq 1 30); do
-  STATUS=$(gh pr checks <pr-number> --json state --jq '.[].state' 2>/dev/null)
-  if echo "$STATUS" | grep -qv "PENDING\|QUEUED\|IN_PROGRESS"; then
-    break
-  fi
-  sleep 10
-done
-```
+**10d (auto). Resolve review findings (3rd set of eyes)**
 
-Once checks complete, read the PR comments looking for a review:
+Read PR comments looking for a review:
 ```bash
 gh pr view <pr-number> --json comments --jq '.comments[].body'
 ```
 
-**If no review comments were posted** (no review workflow, or review didn't produce comments): Skip to Step 10e (merge). The 1st eyes (team-reviewer during implementation) are sufficient — the 2nd/3rd eyes are additive when available, not required.
+If no review comments found: skip to 10e. The 1st eyes (team-reviewer during implementation) are sufficient.
 
-**If review comments were found**: Proceed to Step 10d to resolve them.
+If review comments found, resolve each finding using full local context (Implementation Plan, PRD, codebase):
 
-#### 10d. Resolve review findings (3rd set of eyes)
-
-The PR review (2nd eyes) ran without full context — it reviewed the raw diff. It finds real issues AND false positives. This step resolves each finding using the full context available locally: the Implementation Plan, PRD, coding standards, and the complete codebase.
-
-For each finding in the review comment:
-
-1. **Read the finding** — extract the severity (🔴/🟠/🟡/🟢), file, line, and description
-2. **Evaluate against the plan** — read the relevant Change Manifest entry and the PRD requirement it traces to. Ask:
-   - Is this a real defect that the plan didn't account for?
-   - Is this a false positive because the reviewer lacked context (e.g., "null not handled" when null is handled upstream per REQ-003)?
-   - Is this valid but out of scope for this PR?
-3. **Decide the resolution**:
-   - **Fix**: Real defect. Implement the fix.
-   - **Dismiss**: False positive. Document why with reference to the plan/requirement.
-   - **Defer**: Valid concern but out of scope. Note it for future work.
-
-After evaluating all findings, if any fixes are needed:
-1. Implement all fixes in a **single commit** (conventional format: `fix(<scope>): address PR review findings`)
-2. Push the commit. The PR review workflow should NOT re-trigger for this commit (the workflow should use concurrency groups to avoid review loops, or the commit message can include `[skip review]` if the workflow supports it).
-
-Post a resolution comment on the PR:
+1. **Read the finding** — extract severity (🔴/🟠/🟡/🟢), file, line, description
+2. **Evaluate against the plan** — read the relevant Change Manifest entry and PRD requirement:
+   - Real defect the plan didn't account for? → **Fix**
+   - False positive due to missing context? → **Dismiss** with plan/requirement reference
+   - Valid but out of scope? → **Defer**
+3. If fixes needed: implement in a **single commit** (`fix(<scope>): address PR review findings`), push
+4. Post a resolution comment:
 
 ```markdown
 ## Review Resolution
@@ -492,30 +473,64 @@ Post a resolution comment on the PR:
 | 1 | Null check missing on `processPayment()` | 🟠 High | ✅ Fixed | Real defect — input validation was missing |
 | 2 | `fetchUser()` doesn't handle 404 | 🟡 Medium | ⏭ Dismissed | Handled by middleware error boundary (REQ-003) |
 | 3 | No rate limiting on new endpoint | 🟡 Medium | 📋 Deferred | Valid — tracked as follow-up issue |
-
-Fixes pushed in commit <sha>.
 ```
 
-If no findings need fixes (all dismissed or no review comments), post:
-```markdown
-## Review Resolution
+**10e (auto). Merge**
 
-PR review findings evaluated against the Implementation Plan.
-No actionable issues found. Ready to merge.
-```
-
-#### 10e. Merge
-
-**If `autoApprove`:** Squash merge automatically after review resolution:
+Squash merge automatically:
 ```bash
 gh pr merge <pr-number> --squash --delete-branch
 ```
 Update the board stream to `merged` via `board_run`. Post a completion comment on the linked issue.
 
-**If manual:** Use AskUserQuestion:
+---
+
+**Manual mode (no `autoApprove`):**
+
+**10c (manual). Check for CI and hand off to human**
+
+```bash
+CHECKS=$(gh pr checks <pr-number> --json name,state 2>/dev/null || echo "")
+```
+
+**If CI checks exist:** Wait for them to complete (same polling as auto mode). Then read review comments. If review comments found, resolve findings (same as 10d auto) — push fixes, post the resolution comment. Then present merge options (10e manual below).
+
+**If NO CI checks exist:** Post an awaiting-review comment on the PR and stop:
+
+```bash
+gh pr comment <pr-number> --body "## Ready for Review
+
+This PR was created by Root. Implementation was validated by the team:
+- team-reviewer: PASS (per-group validation)
+- Lint/type-check: PASS
+- Tests: PASS
+
+**Plan**: <plan-path>
+**Issue**: #<issue-number>
+
+### Next Steps
+- Review the changes
+- Comment \`@root LGTM\` to squash merge
+- Comment \`@root fix <feedback>\` to request changes
+- Or merge manually"
+```
+
+Output to the user:
+```
+PR #<number> created and awaiting review.
+No CI checks configured — posted review instructions on the PR.
+```
+
+**Stop here.** The PR is in the human's hands. They will review, comment, and either merge manually or use `@root` commands if the workflow is installed.
+
+**10e (manual, after CI/review resolution). Merge options**
+
+If CI ran and review was resolved, present options:
+
+Use AskUserQuestion:
 - **"Squash merge"** — `gh pr merge --squash --delete-branch`, update board
 - **"Merge (no squash)"** — `gh pr merge --delete-branch`, update board
-- **"Wait"** — leave the PR open for human review. The resolution comment is already posted.
+- **"Wait"** — leave the PR open for further human review
 
 After merge, call `board_run` to transition the stream. The next `board_clean` will remove the local worktree.
 
