@@ -16,7 +16,7 @@ PLUGIN_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 # Unified installation directory
 INSTALL_DIR="${HOME}/.root-framework/mcp"
 RAG_BIN="$INSTALL_DIR/node_modules/mcp-local-rag/dist/index.js"
-BOARD_BIN="$INSTALL_DIR/node_modules/mcp-root-board/dist/index.js"
+BOARD_BIN="$INSTALL_DIR/node_modules/@brandcast_app/mcp-root-board/dist/index.js"
 
 # Current config schema version
 CURRENT_CONFIG_VERSION=2
@@ -42,7 +42,7 @@ if [[ ! -f "$BOARD_BIN" ]]; then
   mkdir -p "$INSTALL_DIR"
   cd "$INSTALL_DIR" || exit 1
   npm init -y --silent 2>/dev/null
-  npm install mcp-root-board --silent 2>&1
+  npm install @brandcast_app/mcp-root-board --silent 2>&1
 
   if [[ ! -f "$BOARD_BIN" ]]; then
     echo "Root: Failed to install mcp-root-board. Try running manually: cd $INSTALL_DIR && npm install mcp-root-board"
