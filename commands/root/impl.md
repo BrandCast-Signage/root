@@ -376,9 +376,12 @@ After all code groups are complete, before final validation:
    - Negative test items: present to the user or run if automatable
 4. **Coding Standards**: Verify every item in the checklist is satisfied
 
-### Step 10: Summary and PR
+### Step 10: Summary, PR, Review Resolution, and Merge
 
-1. Output the implementation summary:
+This step has four phases: summary, PR creation, CI/review resolution, and merge. In `autoApprove` mode, all phases run without human intervention.
+
+#### 10a. Output the implementation summary
+
 ```
 ## Implementation Complete
 
@@ -403,18 +406,107 @@ Manual verification: <status>
 Coding standards: <n>/<n> checked
 ```
 
-2. Write PR metadata to `/tmp/root-pr-context.txt`:
-   - ISSUE: issue number
-   - SUMMARY: from plan's Context & Motivation
-   - CHANGES: organized by Execution Group
-   - TESTS: test results
-   - DOCS: any docs created/updated
+#### 10b. Create the PR
 
-3. Use AskUserQuestion:
-   - **"Create PR"** — use `gh pr create` with generated title and body (per-batch `team-reviewer` passes already gate this). After PR creation, if a board stream exists call `board_run` with the issue number to transition the stream to `pr-ready` and add the PR URL to the board stream via `board_sync`.
-   - **"Squash commits and create PR"** — squash all group commits into one, then create PR. Same board update applies after creation.
-   - **"Just commit (no PR)"** — done
-   - **"Full-plan reviewer sweep first"** — spawn `team-reviewer` one more time with the entire plan in scope (cross-group consistency, integration concerns) before the PR
+**If `autoApprove`:** Create the PR automatically — no user prompt. Use squash-ready commit format.
+
+**If manual:** Use AskUserQuestion:
+- **"Create PR"** — proceed
+- **"Squash commits first"** — squash all group commits into one, then create PR
+- **"Just commit (no PR)"** — skip to end
+- **"Full-plan reviewer sweep first"** — spawn `team-reviewer` one more time with the entire plan in scope (cross-group consistency, integration concerns) before creating the PR
+
+Create the PR:
+```bash
+gh pr create --title "<title>" --body "<body with Closes #<issue>>"
+```
+
+After creation, call `board_run` to transition the stream to `pr-ready`.
+
+#### 10c. Wait for CI checks and review
+
+After the PR is created, wait for CI checks to complete. These typically include the automated PR review and any security scans.
+
+```bash
+# Poll for check completion (timeout after 5 minutes)
+gh pr checks <pr-number> --watch --fail-fast
+```
+
+If `gh pr checks --watch` is not available, poll manually:
+```bash
+# Loop until all checks complete or timeout
+for i in $(seq 1 30); do
+  STATUS=$(gh pr checks <pr-number> --json state --jq '.[].state' 2>/dev/null)
+  if echo "$STATUS" | grep -qv "PENDING\|QUEUED\|IN_PROGRESS"; then
+    break
+  fi
+  sleep 10
+done
+```
+
+Once checks complete, read the PR review comments:
+```bash
+gh pr view <pr-number> --json comments --jq '.comments[].body'
+```
+
+If no review comments were posted (no review workflow configured), skip to 10d.
+
+#### 10d. Resolve review findings (3rd set of eyes)
+
+The PR review (2nd eyes) ran without full context — it reviewed the raw diff. It finds real issues AND false positives. This step resolves each finding using the full context available locally: the Implementation Plan, PRD, coding standards, and the complete codebase.
+
+For each finding in the review comment:
+
+1. **Read the finding** — extract the severity (🔴/🟠/🟡/🟢), file, line, and description
+2. **Evaluate against the plan** — read the relevant Change Manifest entry and the PRD requirement it traces to. Ask:
+   - Is this a real defect that the plan didn't account for?
+   - Is this a false positive because the reviewer lacked context (e.g., "null not handled" when null is handled upstream per REQ-003)?
+   - Is this valid but out of scope for this PR?
+3. **Decide the resolution**:
+   - **Fix**: Real defect. Implement the fix.
+   - **Dismiss**: False positive. Document why with reference to the plan/requirement.
+   - **Defer**: Valid concern but out of scope. Note it for future work.
+
+After evaluating all findings, if any fixes are needed:
+1. Implement all fixes in a **single commit** (conventional format: `fix(<scope>): address PR review findings`)
+2. Push the commit. The PR review workflow should NOT re-trigger for this commit (the workflow should use concurrency groups to avoid review loops, or the commit message can include `[skip review]` if the workflow supports it).
+
+Post a resolution comment on the PR:
+
+```markdown
+## Review Resolution
+
+| # | Finding | Severity | Resolution | Reason |
+|---|---------|----------|------------|--------|
+| 1 | Null check missing on `processPayment()` | 🟠 High | ✅ Fixed | Real defect — input validation was missing |
+| 2 | `fetchUser()` doesn't handle 404 | 🟡 Medium | ⏭ Dismissed | Handled by middleware error boundary (REQ-003) |
+| 3 | No rate limiting on new endpoint | 🟡 Medium | 📋 Deferred | Valid — tracked as follow-up issue |
+
+Fixes pushed in commit <sha>.
+```
+
+If no findings need fixes (all dismissed or no review comments), post:
+```markdown
+## Review Resolution
+
+PR review findings evaluated against the Implementation Plan.
+No actionable issues found. Ready to merge.
+```
+
+#### 10e. Merge
+
+**If `autoApprove`:** Squash merge automatically after review resolution:
+```bash
+gh pr merge <pr-number> --squash --delete-branch
+```
+Update the board stream to `merged` via `board_run`. Post a completion comment on the linked issue.
+
+**If manual:** Use AskUserQuestion:
+- **"Squash merge"** — `gh pr merge --squash --delete-branch`, update board
+- **"Merge (no squash)"** — `gh pr merge --delete-branch`, update board
+- **"Wait"** — leave the PR open for human review. The resolution comment is already posted.
+
+After merge, call `board_run` to transition the stream. The next `board_clean` will remove the local worktree.
 
 ### Tier 2 Execution (simplified)
 
@@ -432,8 +524,9 @@ For Tier 2 plans (no Change Manifest, no Execution Groups):
 4. Run `validation.lintCommand` and `validation.testCommand`
 5. Fix any failures
 6. Create a single commit with conventional format
-7. Output summary and offer PR creation
-8. One checkpoint at the end before commit — no per-step checkpoints
+7. Create PR via `gh pr create`
+8. Wait for CI checks and resolve review findings (same as Step 10c-10d above)
+9. If `autoApprove`: squash merge automatically. If manual: present merge options.
 
 ## `resume`
 
