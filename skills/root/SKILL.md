@@ -1,8 +1,8 @@
 ---
 name: root
-description: "Root development workflow framework. Classifies work tier, fetches issue context, loads relevant docs via RAG, drives planning, and initializes session tracking. Run at the start of every task. Examples: /root fix issue 1132, /root new calendar integration, /root #1234"
+description: "Start or continue a Root development session for a GitHub issue. On first invocation classifies tier, loads docs via RAG, and plans. On re-invocation drives the stream through implementation, review, and merge. Also handles orchestration verbs (list, status, approve, run, sync, delete, clean, reset)."
+argument-hint: "#<issue> [description] | list | status #<issue> | approve #<issue> | run | sync | delete #<issue> | clean | reset"
 user-invocable: true
-argument: task - description of the work (e.g., "fix issue 1132", "#1234", "new weather integration", "reset")
 ---
 
 # /root — Development Workflow Session Init
