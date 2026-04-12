@@ -431,7 +431,16 @@ After creation, call `board_run` to transition the stream to `pr-ready`.
 
 #### 10c. Wait for CI checks and review
 
-After the PR is created, wait for CI checks to complete. These typically include the automated PR review and any security scans.
+After the PR is created, check whether CI checks are running. If no checks exist, skip directly to 10e (merge).
+
+```bash
+# Check if any CI checks exist for this PR
+CHECKS=$(gh pr checks <pr-number> --json name,state 2>/dev/null || echo "")
+```
+
+**If no checks exist** (empty response, or `gh pr checks` fails): No CI is configured for this repo. Skip to Step 10e (merge). Do NOT poll or wait — there is nothing to wait for.
+
+**If checks exist**, wait for them to complete:
 
 ```bash
 # Poll for check completion (timeout after 5 minutes)
@@ -450,12 +459,14 @@ for i in $(seq 1 30); do
 done
 ```
 
-Once checks complete, read the PR review comments:
+Once checks complete, read the PR comments looking for a review:
 ```bash
 gh pr view <pr-number> --json comments --jq '.comments[].body'
 ```
 
-If no review comments were posted (no review workflow configured), skip to 10d.
+**If no review comments were posted** (no review workflow, or review didn't produce comments): Skip to Step 10e (merge). The 1st eyes (team-reviewer during implementation) are sufficient — the 2nd/3rd eyes are additive when available, not required.
+
+**If review comments were found**: Proceed to Step 10d to resolve them.
 
 #### 10d. Resolve review findings (3rd set of eyes)
 
