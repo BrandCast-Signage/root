@@ -374,6 +374,53 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
+// Tool: board_delete
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "board_delete",
+  "Delete a work stream and its worktree. Use when abandoning work on an issue.",
+  { issue: z.number().int().positive().describe("GitHub issue number") },
+  async ({ issue }) => {
+    const stream = readStream(rootDir, issue);
+
+    if (stream === null) {
+      return {
+        content: [{ type: "text", text: `No stream found for #${issue}` }],
+      };
+    }
+
+    // Remove worktree if it exists.
+    if (stream.worktreePath !== null) {
+      try {
+        removeWorktree(rootDir, stream.worktreePath);
+      } catch {
+        // Already gone — continue.
+      }
+    }
+
+    // Remove root: labels from the issue.
+    const rootLabels = ["root:planning", "root:plan-ready", "root:approved", "root:implementing", "root:validating", "root:pr-ready"];
+    for (const label of rootLabels) {
+      try {
+        removeLabel(issue, label);
+      } catch {
+        // Non-fatal.
+      }
+    }
+
+    // Delete the stream file.
+    deleteStream(rootDir, issue);
+
+    return {
+      content: [
+        { type: "text", text: `Stream #${issue} deleted. Worktree and labels cleaned up.` },
+      ],
+    };
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Tool: board_clean
 // ---------------------------------------------------------------------------
 

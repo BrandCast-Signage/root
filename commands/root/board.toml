@@ -106,9 +106,17 @@ Synchronize local board state with GitHub.
 1. Call `board_sync` MCP tool
 2. Output the result (which streams were updated and how)
 
+### `delete <issue>`
+
+Abandon a work stream. Removes the stream record, its worktree, and any `root:*` labels from the GitHub issue.
+
+1. Parse the issue number
+2. Call `board_delete` MCP tool with the issue number
+3. Output the result
+
 ### `clean`
 
-Clean up completed streams and their worktrees.
+Clean up completed streams (status `merged` or `pr-ready`) and their worktrees.
 
 1. Call `board_clean` MCP tool
 2. Output the result (how many streams cleaned, which worktrees removed)

@@ -283,6 +283,43 @@ server.tool("board_sync", "Sync all stream statuses with GitHub — detects labe
     return { content: [{ type: "text", text: summary }] };
 });
 // ---------------------------------------------------------------------------
+// Tool: board_delete
+// ---------------------------------------------------------------------------
+server.tool("board_delete", "Delete a work stream and its worktree. Use when abandoning work on an issue.", { issue: zod_1.z.number().int().positive().describe("GitHub issue number") }, async ({ issue }) => {
+    const stream = (0, board_js_1.readStream)(rootDir, issue);
+    if (stream === null) {
+        return {
+            content: [{ type: "text", text: `No stream found for #${issue}` }],
+        };
+    }
+    // Remove worktree if it exists.
+    if (stream.worktreePath !== null) {
+        try {
+            (0, worktree_js_1.removeWorktree)(rootDir, stream.worktreePath);
+        }
+        catch {
+            // Already gone — continue.
+        }
+    }
+    // Remove root: labels from the issue.
+    const rootLabels = ["root:planning", "root:plan-ready", "root:approved", "root:implementing", "root:validating", "root:pr-ready"];
+    for (const label of rootLabels) {
+        try {
+            (0, github_js_1.removeLabel)(issue, label);
+        }
+        catch {
+            // Non-fatal.
+        }
+    }
+    // Delete the stream file.
+    (0, board_js_1.deleteStream)(rootDir, issue);
+    return {
+        content: [
+            { type: "text", text: `Stream #${issue} deleted. Worktree and labels cleaned up.` },
+        ],
+    };
+});
+// ---------------------------------------------------------------------------
 // Tool: board_clean
 // ---------------------------------------------------------------------------
 server.tool("board_clean", "Remove worktrees and board records for streams in merged or pr-ready status.", {}, async () => {
