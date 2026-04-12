@@ -137,6 +137,7 @@ function createStream(issue, tier, rootDir) {
         worktreePath: null,
         planPath: null,
         prdPath: null,
+        autoApprove: false,
         groups: {},
         created: now,
         updated: now,

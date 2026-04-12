@@ -31,14 +31,20 @@ function migrate(state) {
                 worktreePath: raw["worktreePath"] ?? null,
                 planPath: raw["planPath"] ?? null,
                 prdPath: raw["prdPath"] ?? null,
+                autoApprove: raw["autoApprove"] ?? false,
                 groups: raw["groups"] ?? {},
                 created: raw["created"] ?? new Date().toISOString(),
                 updated: raw["updated"] ?? new Date().toISOString(),
             };
         }
-        case types_js_1.SCHEMA_VERSION:
-            // Already at current version — return as-is.
-            return raw;
+        case types_js_1.SCHEMA_VERSION: {
+            // Already at current version — backfill any fields added without a version bump.
+            const current = raw;
+            if (current.autoApprove === undefined) {
+                current.autoApprove = false;
+            }
+            return current;
+        }
         default:
             // Unknown future version — return as-is and let the caller decide.
             return raw;

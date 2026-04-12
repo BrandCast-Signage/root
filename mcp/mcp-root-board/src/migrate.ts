@@ -30,15 +30,21 @@ export function migrate(state: unknown): StreamState {
         worktreePath: (raw["worktreePath"] as string | null) ?? null,
         planPath: (raw["planPath"] as string | null) ?? null,
         prdPath: (raw["prdPath"] as string | null) ?? null,
+        autoApprove: (raw["autoApprove"] as boolean) ?? false,
         groups: (raw["groups"] as StreamState["groups"]) ?? {},
         created: (raw["created"] as string) ?? new Date().toISOString(),
         updated: (raw["updated"] as string) ?? new Date().toISOString(),
       };
     }
 
-    case SCHEMA_VERSION:
-      // Already at current version — return as-is.
-      return raw as unknown as StreamState;
+    case SCHEMA_VERSION: {
+      // Already at current version — backfill any fields added without a version bump.
+      const current = raw as unknown as StreamState;
+      if (current.autoApprove === undefined) {
+        current.autoApprove = false;
+      }
+      return current;
+    }
 
     default:
       // Unknown future version — return as-is and let the caller decide.

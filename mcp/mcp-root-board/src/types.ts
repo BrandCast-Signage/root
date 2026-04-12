@@ -68,6 +68,8 @@ export interface StreamState {
   planPath: string | null;
   /** Relative path to the PRD file, or null if not yet created. */
   prdPath: string | null;
+  /** When true, all gates auto-advance regardless of tier or config. */
+  autoApprove: boolean;
   /** Map of group ID → assignment details. */
   groups: Record<string, GroupAssignment>;
   /** ISO 8601 timestamp of stream creation. */

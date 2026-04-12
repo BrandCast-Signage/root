@@ -61,7 +61,10 @@ server.tool("board_list", "List all active work streams on the board.", {}, asyn
 // ---------------------------------------------------------------------------
 // Tool: board_start
 // ---------------------------------------------------------------------------
-server.tool("board_start", "Start a new work stream for a GitHub issue. Fetches issue context, creates a stream record, and sets up a git worktree.", { issue: zod_1.z.number().int().positive().describe("GitHub issue number") }, async ({ issue }) => {
+server.tool("board_start", "Start a new work stream for a GitHub issue. Fetches issue context, creates a stream record, and sets up a git worktree.", {
+    issue: zod_1.z.number().int().positive().describe("GitHub issue number"),
+    autoApprove: zod_1.z.boolean().optional().describe("When true, all gates auto-advance — fully autonomous even for Tier 1"),
+}, async ({ issue, autoApprove }) => {
     // Fetch issue context from GitHub.
     const issueData = (0, github_js_1.getIssue)(issue);
     const issueContext = {
@@ -72,6 +75,10 @@ server.tool("board_start", "Start a new work stream for a GitHub issue. Fetches 
     };
     // Create the stream (default tier1 — tier is classified later by /root skill).
     const stream = (0, board_js_1.createStream)(issueContext, "tier1", rootDir);
+    // Set auto-approve if requested.
+    if (autoApprove) {
+        (0, board_js_1.updateStream)(rootDir, issue, { autoApprove: true });
+    }
     // Build branch name: feat/<issue>-<slugified-title>
     const branchName = `feat/${issue}-${slugify(issueData.title)}`;
     // Create the worktree.
@@ -193,8 +200,8 @@ server.tool("board_run", "Evaluate gates and determine the next action for a wor
             ],
         };
     }
-    // If there is a gate, evaluate it.
-    if (transition.gate !== null) {
+    // If there is a gate, evaluate it (unless stream has autoApprove).
+    if (transition.gate !== null && !stream.autoApprove) {
         const gateConfig = (0, gates_js_1.loadGateConfig)(rootDir);
         const gateResult = (0, gates_js_1.evaluateGate)(transition.gate, stream.tier, gateConfig);
         if (gateResult.action === "human") {

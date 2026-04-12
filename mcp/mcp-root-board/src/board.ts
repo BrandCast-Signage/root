@@ -102,6 +102,7 @@ export function createStream(issue: IssueContext, tier: Tier, rootDir: string): 
     worktreePath: null,
     planPath: null,
     prdPath: null,
+    autoApprove: false,
     groups: {},
     created: now,
     updated: now,

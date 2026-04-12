@@ -76,8 +76,11 @@ server.tool("board_list", "List all active work streams on the board.", {}, asyn
 server.tool(
   "board_start",
   "Start a new work stream for a GitHub issue. Fetches issue context, creates a stream record, and sets up a git worktree.",
-  { issue: z.number().int().positive().describe("GitHub issue number") },
-  async ({ issue }) => {
+  {
+    issue: z.number().int().positive().describe("GitHub issue number"),
+    autoApprove: z.boolean().optional().describe("When true, all gates auto-advance — fully autonomous even for Tier 1"),
+  },
+  async ({ issue, autoApprove }) => {
     // Fetch issue context from GitHub.
     const issueData = getIssue(issue);
     const issueContext: IssueContext = {
@@ -89,6 +92,11 @@ server.tool(
 
     // Create the stream (default tier1 — tier is classified later by /root skill).
     const stream = createStream(issueContext, "tier1", rootDir);
+
+    // Set auto-approve if requested.
+    if (autoApprove) {
+      updateStream(rootDir, issue, { autoApprove: true });
+    }
 
     // Build branch name: feat/<issue>-<slugified-title>
     const branchName = `feat/${issue}-${slugify(issueData.title)}`;
@@ -251,8 +259,8 @@ server.tool(
       };
     }
 
-    // If there is a gate, evaluate it.
-    if (transition.gate !== null) {
+    // If there is a gate, evaluate it (unless stream has autoApprove).
+    if (transition.gate !== null && !stream.autoApprove) {
       const gateConfig = loadGateConfig(rootDir);
       const gateResult = evaluateGate(transition.gate, stream.tier, gateConfig);
 

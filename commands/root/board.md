@@ -14,14 +14,16 @@ Show all active streams.
 2. Output the result as-is (it returns a formatted table)
 3. If no streams, suggest: "No active streams. Start one with `/root:board start #<issue>`"
 
-### `start <issue>`
+### `start <issue> [--auto]`
 
 Create a new work stream for a GitHub issue.
 
 1. Parse the issue number from the argument (supports `#42`, `42`, `issue 42`)
-2. Call `board_start` MCP tool with the issue number
-3. Output the stream summary
-4. Suggest next step: "Stream created. Run `/root:board run #<issue>` to begin autonomous execution, or `/root #<issue>` for manual control."
+2. Check for `--auto` flag. If present, pass `autoApprove: true` to the MCP tool — this makes the stream fully autonomous, skipping all human-approval gates including Tier 1 plan approval.
+3. Call `board_start` MCP tool with the issue number (and `autoApprove` if flagged)
+4. Output the stream summary
+5. If `--auto`: "Stream created in auto-approve mode. All gates will auto-advance."
+6. Suggest next step: "Run `/root:board run #<issue>` to begin autonomous execution, or `/root #<issue>` for manual control."
 
 ### `status [issue]`
 
