@@ -2,7 +2,7 @@
 
 Development workflow framework for Claude Code and Gemini CLI.
 
-Root provides **tier-based planning**, **doc-aware context gathering**, **RAG-powered search**, **session tracking**, and **implementation plan generation**.
+Root provides **tier-based planning**, **doc-aware context gathering**, **RAG-powered search**, **multi-feature orchestration**, and **autonomous issue-to-PR workflows**.
 
 ## Install
 
@@ -46,13 +46,35 @@ This interactively detects your project structure, asks which directories contai
 | Command | Description |
 |---------|-------------|
 | `/root <task>` | Start a development session — context gathering + planning |
+| `/root:board [action]` | Board orchestration: `list`, `start`, `status`, `approve`, `run`, `sync`, `clean` |
 | `/root:init` | Interactive project setup |
 | `/root:prd [action]` | PRD authoring: `new`, `edit`, `review`, `list` |
 | `/root:impl [action]` | Execute a plan: `run`, `resume`, `status`, `finalize` |
+| `/root:explore [action]` | RAG-powered codebase exploration: `topic`, `flow`, `map` |
 | `/root:rag [action]` | Manage RAG database: `status`, `ingest`, `refresh`, `clear`, `config`, `scan` |
 | `/root:docs [action]` | Documentation management: `health`, `search`, `stale`, `scan`, `validate`, `fix`, `create` |
 
 ## Usage
+
+### Board Orchestration (v2.0)
+
+Run multiple features in parallel with autonomous issue-to-PR progression:
+
+```
+/root:board start #42             # Create a work stream for an issue
+/root:board start #58             # Start another — each gets its own worktree
+/root:board run                   # Auto-progress all streams through gates
+/root:board                       # View all active streams and their status
+/root:board approve #42           # Green-light a Tier 1 plan
+/root:board sync                  # Sync local state with GitHub labels
+/root:board clean                 # Tear down merged worktrees
+```
+
+**How it works:** Each stream progresses through a state machine (`queued → planning → plan-ready → approved → implementing → validating → pr-ready → merged`). Gates at each transition determine whether to auto-advance or pause for human approval. Tier 2 work (bug fixes) runs fully autonomously to PR. Tier 1 work pauses once for plan approval, then runs autonomously.
+
+Streams are tracked locally in `.root/board/` and reflected on GitHub issues via labels (`root:planning`, `root:plan-ready`, `root:approved`, `root:implementing`, `root:pr-ready`). Approve from anywhere — CLI, GitHub UI, or your phone.
+
+### Core Workflow
 
 ```
 /root fix issue 1132      # Start session from a GitHub issue
@@ -67,6 +89,10 @@ This interactively detects your project structure, asks which directories contai
 /root:impl                       # Execute the approved plan
 /root:impl status                # Check implementation progress
 /root:impl resume                # Pick up where you left off
+
+/root:explore topic auth         # Explore a topic across the codebase
+/root:explore flow login         # Trace a flow end-to-end
+/root:explore map                # Map the codebase architecture
 
 /root:rag status                # Check RAG database state
 /root:rag refresh               # Re-ingest all docs after major changes
@@ -88,12 +114,12 @@ This interactively detects your project structure, asks which directories contai
 3. **Classifies** as Tier 1 (full process) or Tier 2 (light process)
 4. **Loads** relevant docs via RAG semantic search
 5. **Recommends** specialist agents based on config mappings
-6. **Tracks** your session (files edited, docs read)
+6. **Tracks** your session (files edited, docs read, board stream state)
 7. **Drives planning**:
    - **Tier 1**: Guided PRD → Implementation Plan with Change Manifest, Dependency Graph, Execution Groups, and Verification Plan
    - **Tier 2**: Uses built-in plan mode for lightweight planning
 8. **Executes** via `/root:impl` — parallel agents across Execution Groups, validation checkpoints, test generation, doc creation, and commit/PR
-9. **Or creates issues** — one GitHub issue per Execution Group with linked requirements and cross-references
+9. **Or orchestrates** via `/root:board run` — autonomous progression through gates, GitHub label lifecycle, and PR creation with zero human intervention (Tier 2) or one approval (Tier 1)
 
 ### Two-Tier Workflow
 
@@ -177,7 +203,7 @@ Specialist agents are templates — customize their expertise areas and key refe
 
 | Hook | Event | Purpose |
 |------|-------|---------|
-| `ensure-rag.sh` | Session start | Auto-installs RAG server, auto-ingests if DB is empty |
+| `ensure-mcp.sh` | Session start | Auto-installs RAG + board MCP servers, checks `gh` auth, auto-ingests if DB is empty |
 | `track-edits.sh` | After file write/edit | Tracks edited files in session state, warns on missing frontmatter |
 | `track-doc-reads.sh` | After file read | Tracks doc reads in session state |
 | `context-receipt.sh` | Session end | Outputs session summary (tier, issue, files, docs) |
@@ -219,6 +245,15 @@ Specialist agents are templates — customize their expertise areas and key refe
   "validation": {
     "lintCommand": "npm run lint && npm run type-check",
     "testCommand": "npm test -- <pattern>"
+  },
+  "board": {
+    "gates": {
+      "plan_approval": { "tier1": "human", "tier2": "auto" },
+      "reviewer_pass": "auto",
+      "validation": "auto",
+      "pr_creation": "auto"
+    },
+    "maxParallel": 3
   }
 }
 ```
@@ -235,19 +270,36 @@ Root uses three mapping types to recommend agents for a task:
 
 Override default heuristics for `/root:docs scan`. Each entry maps a glob pattern to a doc type and output directory. When present, `scan` uses these instead of built-in heuristics.
 
+### Board Gates
+
+The `board.gates` section controls which transitions require human approval:
+
+| Gate | Default | Purpose |
+|------|---------|---------|
+| `plan_approval` | `tier1: human, tier2: auto` | Whether plans need human review before implementation |
+| `reviewer_pass` | `auto` | Whether code review gates auto-advance |
+| `validation` | `auto` | Whether lint/type/test validation auto-advances |
+| `pr_creation` | `auto` | Whether PR creation is automatic |
+
+Set any gate to `"human"` to always pause, `"auto"` to always advance, or use `{ "tier1": "human", "tier2": "auto" }` for tier-specific behavior.
+
 ## Components
 
 | Component | Type | Purpose |
 |-----------|------|---------|
 | `root` | Skill | Workflow entry point — context + planning |
 | `mcp-local-rag` | Skill | RAG query/ingest guidance |
+| `mcp-root-board` | MCP Server | Board orchestration — state machine, worktree lifecycle, GitHub integration, gates |
+| `root:board` | Command | Board management (7 subcommands) |
 | `root:init` | Command | Interactive project setup |
 | `root:prd` | Command | Guided PRD authoring (4 subcommands) |
 | `root:impl` | Command | Plan execution with parallel agents (4 subcommands) |
+| `root:explore` | Command | RAG-powered codebase exploration (3 subcommands) |
 | `root:rag` | Command | RAG database management (6 subcommands) |
 | `root:docs` | Command | Documentation management (7 subcommands) |
 | Session hooks | Hooks | Track edits, doc reads, frontmatter enforcement, context receipts |
 | Agent templates | Agents | Team (architect/implementer/reviewer/tester) + specialist (backend/frontend/database/devops) |
+| Model rubric | Reference | When to use Opus vs Sonnet, Claude vs Gemini per workflow phase |
 | Plan template | Template | Tier 1 implementation plan structure |
 | PRD template | Template | Product requirements document structure |
 
@@ -267,9 +319,24 @@ Override default heuristics for `/root:docs scan`. Each entry maps a glob patter
 gemini extension update root
 ```
 
+## Cross-Harness Support
+
+Root works with both Claude Code and Gemini CLI. The board orchestration layer enables them to work on the same project simultaneously:
+
+- Each execution group within a feature can be assigned to a different harness
+- Claude handles Group A in one worktree, Gemini handles Group B in another
+- Both read/write the same board state (`.root/board/`) — no conflicts on different streams
+- The model rubric (`skills/root/MODEL_RUBRIC.md`) guides when to use which model and harness
+
+### Prerequisites
+
+- **`gh` CLI**: Required for board GitHub features (labels, comments, PRs). Install: https://cli.github.com
+- Run `gh auth login` before using board commands
+- If `gh` is not authenticated, board still works locally — GitHub features are skipped gracefully
+
 ## Known Limitations
 
-**Session file**: `/tmp/root-session.json` is ephemeral and cleared if the session exceeds 4 hours. It does not persist across terminal restarts.
+**Session file fallback**: The legacy `/tmp/root-session.json` is still written as a fallback for projects without the board MCP server. It is ephemeral and cleared after 4 hours. Prefer the board (`/root:board`) for persistent state.
 
 ## License
 
