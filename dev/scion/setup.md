@@ -259,7 +259,7 @@ brandcast's `.claude/settings.json` references hooks by host-absolute paths (e.g
 
 ## Quick Re-seed Script
 
-When credentials rotate (OAuth refresh happens quarterly-ish; Scion doesn't hot-reload), re-run:
+**Run this at the start of every Scion session.** OAuth tokens rotate within hours (not days as initially assumed) — confirmed during the first real-issue test, where a token seeded ~2 hours earlier returned `401 Invalid authentication credentials`. Scion templates and live agents don't hot-reload credentials; you must re-seed and restart any running agents.
 
 ```bash
 umask 077
