@@ -28,6 +28,36 @@ Parse the first word of the argument to determine the action:
    - Has Change Manifest table + Execution Groups → Tier 1
    - Numbered step list without Change Manifest → Tier 2
 
+## Autonomous Mode Contract
+
+This contract applies across **every** step of `/root:impl`. Read the stream's `autoApprove` flag (from `board_status`) and honor it:
+
+### When `autoApprove: true`
+
+**Never prompt the user.** Do not call `AskUserQuestion`. Do not halt and ask "which option?" Do not wait for a reply. The flag exists to delegate judgment to you — exercise it.
+
+**When you encounter a judgment call** (plan deviation, target metric miss, approach ambiguity, unexpected scope), follow this protocol:
+
+1. **Decide** using your best analysis. State the decision in one line to the user log (so the session trace shows what happened).
+2. **Document** the decision in a "Deviations from Plan" section you append to the PR body at Step 10b. Each entry: what deviated, why, what you chose, what impact.
+3. **Proceed.** Do not stop for ratification.
+
+**Target metric misses are not deviations.** If the plan has a "Target Metrics" section (LOC deltas, bundle size, test counts, etc.), missing a target is expected to be possible — those are directional, not contractual. Report actual vs target in the PR body's "Target Metrics" summary and proceed without surfacing it as a deviation.
+
+**The only legitimate halt in auto mode:** an unrecoverable failure you cannot fix after best-effort attempts (tests fail deterministically after multiple fix attempts; build is broken and no rollback succeeds; MCP/gh/network outage persists). In that case:
+
+1. Call `board_run` with a `blocked` signal (or update stream status to `blocked` via `updateStream` — the MCP tool handles this).
+2. Post a PR comment (if a PR exists) or a GitHub issue comment (if not) describing the failure, what you tried, and what needs human judgment.
+3. Stop.
+
+### When `autoApprove: false` (manual)
+
+Prompt as documented at each step. `AskUserQuestion` is available. Checkpoints require human confirmation. This is the default.
+
+### Why this contract exists
+
+Before this contract was explicit, `/root:impl` in auto mode still surfaced "which option?" prompts at points the protocol hadn't anticipated — notably plan-vs-actual deviations like LOC targets. That defeated the point of `--auto`. This section is the general rule; individual steps may further constrain behavior, but none may loosen it.
+
 ## Phase-Aware Dispatch (default)
 
 When `/root:impl` is invoked with an issue number or no argument (i.e., no named subcommand), run Shared Setup and then route based on the stream's status:
@@ -81,6 +111,16 @@ Before executing any plan, validate it against this rubric. If the plan fails, s
 **Verification Plan MUST have:**
 - At least one automated check (lint, type-check, or test command with specific pattern)
 - At least one concrete manual verification step (not "verify it works" — must describe what to do and what to expect)
+
+**Requirements and Verification items MUST be behavioral/capability-based, not metric-based.** Pass/fail contracts describe *what the system does* ("FamilyCast path removed," "byte-parity with v1 fixtures," "regression test added for renderDeep"). Quantitative targets (LOC delta, bundle size, test count, duplication percentage, performance numbers) belong in the plan's **Target Metrics** section — where missing the number is reported, not blocked.
+
+Reject any Requirement or Verification item matching patterns like:
+- "≥ N lines removed / LOC reduction of N / net delta of −N"
+- "Bundle size under N KB" (unless framed as a constraint: "does not exceed current bundle size" is behavioral — "reduces bundle by 10%" is a metric)
+- "At least N tests added" (count — metric)
+- "Coverage ≥ N%" (metric)
+
+If the plan is missing a Target Metrics section but has metric-shaped items in Requirements or Verification, the rubric fails with instruction to move them.
 
 **If the rubric fails**, output:
 ```
@@ -372,7 +412,9 @@ Progress: <completed>/<total> groups
 Next batch: Group(s) <letters> (<n> changes)
 ```
 
-Use AskUserQuestion:
+**If `autoApprove: true`:** skip the prompt. Log the checkpoint block above, proceed directly to Step 5 for the next batch.
+
+**If manual:** Use AskUserQuestion:
 - **"Continue to next batch"** — proceed to Step 5 for next batch
 - **"Review changes first"** — show `git log --oneline -<n>` and `git diff HEAD~<n>` for this batch's commits, then ask again
 - **"Stop here"** — stop. User can resume later with `/root:impl resume`

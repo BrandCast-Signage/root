@@ -94,6 +94,18 @@ _Proactive items prevent future tech debt. Each must justify why it belongs in t
 - [ ] **Manual**: [Describe end-to-end scenario to verify]
 - [ ] **Negative**: [Describe what should NOT work / regression check]
 
+_Verification items are pass/fail. Quantitative targets (LOC, bundle size, counts) go in Target Metrics below — not here._
+
+## Target Metrics
+
+_Directional indicators tracked for reporting. Unlike Requirements and Verification items, **missing a target metric does NOT block shipping** — it is reported in the PR summary alongside the actual result. Use this section for LOC deltas, bundle-size changes, test-count goals, duplication measurements, or any quantitative target that represents a direction rather than a contract. Omit the entire section if the work has no applicable metrics._
+
+| Metric | Goal | Rationale | Actual (filled at PR time) |
+|--------|------|-----------|----------------------------|
+| LOC delta in `src/documents.ts` | −600 | Audit estimated ~800-1000 reducible; 600 is the conservative floor | — |
+| Bundle size | ≤ current | This refactor must not grow shipped JS | — |
+| Helper reusability | ≥ 3 callsites per new helper | Below this, the abstraction isn't paying rent | — |
+
 ## Open Questions
 
 _Remove this section entirely if none. Open questions block implementation — resolve before starting._
