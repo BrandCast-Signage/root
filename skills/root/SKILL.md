@@ -1,7 +1,7 @@
 ---
 name: root
 description: "Start or continue a Root development session for a GitHub issue. On first invocation classifies tier, loads docs via RAG, and plans. On re-invocation drives the stream through implementation, review, and merge. Also handles orchestration verbs (list, status, approve, run, sync, delete, clean, reset)."
-argument-hint: "#<issue> [description] | list | status #<issue> | approve #<issue> | run | sync | delete #<issue> | clean | reset"
+argument-hint: "#<issue> [description] [--auto] | list | status #<issue> | approve #<issue> | run | sync | delete #<issue> | clean | reset"
 user-invocable: true
 ---
 
@@ -26,6 +26,10 @@ Execute all steps in order. Steps 1-7 run autonomously. Step 8 drives planning (
 `/root` is both the task entry point AND the orchestration driver. Re-running `/root #<issue>` is the universal "continue" gesture — every invocation inspects stream state and advances to the next actionable phase.
 
 Parse the first token of the argument.
+
+**Flag extraction.** Before matching verbs or issue numbers, scan the argument for these flags and remove them from the token stream:
+- `--auto` — set the `autoApprove` flag. Effect depends on entry path (see below).
+- `--groups A,B` — limit execution to specific groups (passed through to `/root:impl`).
 
 **Reserved orchestration verbs** — if the first token matches one of these, dispatch and stop (no session init):
 
@@ -66,6 +70,16 @@ Stop.
 Only the "no stream" and "planning" branches fall through to Steps 1-8 below. All other actionable branches dispatch to `/root:impl` and loop on re-evaluation until the stream reaches a human gate (`plan-ready`) or terminal state (`merged`).
 
 **`pr-ready` is not terminal.** A stream reaches `pr-ready` when the PR exists but CI may still be pending, review comments may be unresolved, and the merge hasn't happened. Re-invoking `/root #<issue>` drives the stream through Step 10c (CI poll), Step 10d (review resolution), and Step 10e (merge) until it reaches `merged`.
+
+**`--auto` flag behavior** (when extracted above):
+
+| Entry path | Effect |
+|------------|--------|
+| No stream exists (fresh creation) | Pass `autoApprove: true` to `board_start` in Step 6. All gates (including Tier 1 `plan_approval`) auto-advance for this stream. |
+| Stream exists, status `plan-ready` | Treat as equivalent to `approve` — call `board_approve` with the issue, then fall through to phase-aware dispatch. |
+| Stream exists, any other status | `--auto` is a no-op and a warning: "Stream #<issue> already exists with `autoApprove: <value>`. `--auto` only takes effect at stream creation. To green-light a specific gate, use `/root approve #<issue>`." Continue with phase-aware dispatch regardless. |
+
+The MCP enforces this honestly: `board_run` at `mcp/mcp-root-board/src/index.ts:337` skips gate evaluation entirely when `stream.autoApprove === true`, including Tier 1 `plan_approval`. There is no "`--auto` does not override plan_approval" rule — if you see a message claiming that, the stream's `autoApprove` is `false`.
 
 ### Step 1: Parse the argument
 
@@ -131,7 +145,11 @@ For each entry in `keywordMappings`, check if any `keywords` appear in the task 
 
 ### Step 6: Initialize session state
 
-Call `board_start` MCP tool with the issue number. This creates the board stream (or is a no-op if one already exists). Then call `board_run` to advance the status from `queued` to `planning`.
+Call `board_start` MCP tool with the issue number. If `--auto` was extracted in Step 0 AND this is a fresh stream (no prior stream existed), pass `autoApprove: true` as well — this sets the stream to fully autonomous so all gates (including Tier 1 `plan_approval`) auto-advance.
+
+> **Warning:** `board_start` is destructive on existing streams — it calls `createStream` which overwrites. Step 0's phase-aware dispatch ensures we only reach Step 6 when no stream exists (the "no stream" branch), so this is safe in practice.
+
+Then call `board_run` to advance the status from `queued` to `planning`.
 
 The board stream at `.root/board/<issue>.json` is the sole source of truth for session state. Do NOT write `/tmp/root-session.json`.
 
