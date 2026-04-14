@@ -5,6 +5,15 @@ All notable changes to the Root development workflow framework are documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.9] — 2026-04-14
+
+### Fixed
+
+- **Tier classification no longer silently defaults to Tier 1.** `board_start` hardcoded `"tier1"` when creating a stream, with a comment that the `/root` skill would classify later — but no tool existed to persist that classification, so every stream ran Tier 1 gate policy regardless of what was said in the kickoff summary.
+- Added `classifyTier` (`mcp/mcp-root-board/src/classify.ts`) which classifies from `type:*` labels (authoritative) and title/body keywords. Ambiguous issues classify as Tier 2 with an explicit reason inviting the caller to override.
+- `board_start` now accepts an optional `tier` override for explicit user intent (e.g. `/root #42 --tier 1`) and reports the classification reason in its response.
+- `skills/root/SKILL.md` Step 3 updated: tier classification is owned by the MCP; the skill only extracts a user override if present.
+
 ## [1.8.0] — 2026-04-11
 
 Tier 1 work now runs through the agent team by default. Main-thread implementation is no longer the normal path — the main session coordinates, agents execute.

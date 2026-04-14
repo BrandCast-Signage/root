@@ -95,19 +95,22 @@ gh issue view <number> --json number,title,body,labels,state,assignees
 
 Store the result. The issue title, body, and labels inform tier classification and doc matching.
 
-### Step 3: Classify tier
+### Step 3: Extract tier override (if any)
 
-Using the task description AND issue context (if available), classify as:
+Tier classification is owned by the MCP. `board_start` inspects the issue's labels, title, and body via `classifyTier` (`mcp/mcp-root-board/src/classify.ts`) and writes a definite tier to the stream record. You do **not** classify tier yourself here.
 
-| Tier | Criteria |
+| Tier | Criteria (used by `classifyTier`) |
 |------|----------|
-| **Tier 1** (Full Process) | New features, large refactors, multi-package changes, schema changes, new integrations, architectural work. Hours-to-days scope. |
-| **Tier 2** (Light Process) | Bug fixes, single-file changes, config updates, dependency bumps, small improvements. Minutes-to-an-hour scope. |
+| **Tier 1** (Full Process) | `type:feature`/`type:refactor`/`type:epic`/`type:breaking`/`type:architecture`/`type:integration` labels, or Tier 1 keywords (refactor, migration, rewrite, new feature, schema change, architecture) in title/body. |
+| **Tier 2** (Light Process) | `type:bug`/`type:fix`/`type:chore`/`type:docs`/`type:dependencies`/`type:typo`/`type:hotfix` labels, or Tier 2 keywords (fix, typo, bump, patch, hotfix, update dep). Also the policy for ambiguous cases. |
 
-Rules:
-- If the user explicitly says "tier 1", "full process", "tier 2", or "quick fix" in the argument, honor that override
-- Use issue labels as a strong signal: `type:feature` leans Tier 1, `type:bug` leans Tier 2
-- When genuinely ambiguous, default to Tier 2 — the user can override
+Your job in this step: extract an explicit user override from the argument, if one was given.
+
+- If the user said "tier 1" / "full process" / "--tier 1" → pass `tier: "tier1"` to `board_start` in Step 6.
+- If the user said "tier 2" / "quick fix" / "--tier 2" → pass `tier: "tier2"`.
+- Otherwise pass no `tier` argument and let `classifyTier` decide.
+
+`board_start`'s response line (`Tier: tierX (reason)`) reports the classification and why. Surface the reason to the user in the Step 7 summary.
 
 ### Step 4: Load relevant docs
 
@@ -145,7 +148,7 @@ For each entry in `keywordMappings`, check if any `keywords` appear in the task 
 
 ### Step 6: Initialize session state
 
-Call `board_start` MCP tool with the issue number. If `--auto` was extracted in Step 0 AND this is a fresh stream (no prior stream existed), pass `autoApprove: true` as well — this sets the stream to fully autonomous so all gates (including Tier 1 `plan_approval`) auto-advance.
+Call `board_start` MCP tool with the issue number. If `--auto` was extracted in Step 0 AND this is a fresh stream (no prior stream existed), pass `autoApprove: true` as well — this sets the stream to fully autonomous so all gates (including Tier 1 `plan_approval`) auto-advance. If a tier override was extracted in Step 3, pass `tier: "tier1"` or `tier: "tier2"` accordingly; otherwise omit `tier` and the MCP will classify from issue data.
 
 > **Warning:** `board_start` is destructive on existing streams — it calls `createStream` which overwrites. Step 0's phase-aware dispatch ensures we only reach Step 6 when no stream exists (the "no stream" branch), so this is safe in practice.
 

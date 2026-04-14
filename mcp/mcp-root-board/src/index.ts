@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { createStream, deleteStream, listStreams, readStream, updateStream } from "./board.js";
+import { classifyTier } from "./classify.js";
 import { evaluateGate, getNextTransition, loadGateConfig } from "./gates.js";
 import { analyzeGraph, extractMermaidBlock } from "./graph.js";
 import { addComment, getIssue, getIssueLabels, removeLabel, setLabel } from "./github.js";
@@ -103,8 +104,9 @@ server.tool(
     issue: z.number().int().positive().describe("GitHub issue number"),
     autoApprove: z.boolean().optional().describe("When true, all gates auto-advance — fully autonomous even for Tier 1"),
     parentIssue: z.number().int().positive().optional().describe("Parent issue number if this stream is a decomposed sub-issue"),
+    tier: z.enum(["tier1", "tier2"]).optional().describe("Explicit tier override (e.g. from a user-supplied --tier flag). When omitted, the tier is classified from issue labels and title/body."),
   },
-  async ({ issue, autoApprove, parentIssue }) => {
+  async ({ issue, autoApprove, parentIssue, tier: tierOverride }) => {
     // Fetch issue context from GitHub.
     const issueData = getIssue(issue);
     const issueContext: IssueContext = {
@@ -114,8 +116,12 @@ server.tool(
       state: issueData.state,
     };
 
-    // Create the stream (default tier1 — tier is classified later by /root skill).
-    const stream = createStream(issueContext, "tier1", rootDir);
+    // Resolve tier: user override wins, otherwise classify from the issue itself.
+    const classification = tierOverride
+      ? { tier: tierOverride, reason: "explicit override" }
+      : classifyTier(issueData);
+
+    const stream = createStream(issueContext, classification.tier, rootDir);
 
     // Set auto-approve and parent linkage if provided.
     const updates: Record<string, unknown> = {};
@@ -162,7 +168,7 @@ server.tool(
       `Branch:    ${updated.branch}`,
       `Worktree:  ${updated.worktreePath}`,
       `Status:    ${updated.status}`,
-      `Tier:      ${updated.tier}`,
+      `Tier:      ${updated.tier} (${classification.reason})`,
     ];
 
     return {

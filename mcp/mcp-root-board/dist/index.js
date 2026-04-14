@@ -4,6 +4,7 @@ const mcp_js_1 = require("@modelcontextprotocol/sdk/server/mcp.js");
 const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
 const zod_1 = require("zod");
 const board_js_1 = require("./board.js");
+const classify_js_1 = require("./classify.js");
 const gates_js_1 = require("./gates.js");
 const graph_js_1 = require("./graph.js");
 const github_js_1 = require("./github.js");
@@ -85,7 +86,8 @@ server.tool("board_start", "Start a new work stream for a GitHub issue. Fetches 
     issue: zod_1.z.number().int().positive().describe("GitHub issue number"),
     autoApprove: zod_1.z.boolean().optional().describe("When true, all gates auto-advance — fully autonomous even for Tier 1"),
     parentIssue: zod_1.z.number().int().positive().optional().describe("Parent issue number if this stream is a decomposed sub-issue"),
-}, async ({ issue, autoApprove, parentIssue }) => {
+    tier: zod_1.z.enum(["tier1", "tier2"]).optional().describe("Explicit tier override (e.g. from a user-supplied --tier flag). When omitted, the tier is classified from issue labels and title/body."),
+}, async ({ issue, autoApprove, parentIssue, tier: tierOverride }) => {
     // Fetch issue context from GitHub.
     const issueData = (0, github_js_1.getIssue)(issue);
     const issueContext = {
@@ -94,8 +96,11 @@ server.tool("board_start", "Start a new work stream for a GitHub issue. Fetches 
         labels: issueData.labels,
         state: issueData.state,
     };
-    // Create the stream (default tier1 — tier is classified later by /root skill).
-    const stream = (0, board_js_1.createStream)(issueContext, "tier1", rootDir);
+    // Resolve tier: user override wins, otherwise classify from the issue itself.
+    const classification = tierOverride
+        ? { tier: tierOverride, reason: "explicit override" }
+        : (0, classify_js_1.classifyTier)(issueData);
+    const stream = (0, board_js_1.createStream)(issueContext, classification.tier, rootDir);
     // Set auto-approve and parent linkage if provided.
     const updates = {};
     if (autoApprove) {
@@ -137,7 +142,7 @@ server.tool("board_start", "Start a new work stream for a GitHub issue. Fetches 
         `Branch:    ${updated.branch}`,
         `Worktree:  ${updated.worktreePath}`,
         `Status:    ${updated.status}`,
-        `Tier:      ${updated.tier}`,
+        `Tier:      ${updated.tier} (${classification.reason})`,
     ];
     return {
         content: [{ type: "text", text: lines.join("\n") }],
