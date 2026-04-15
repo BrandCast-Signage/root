@@ -101,8 +101,8 @@ Tier classification is owned by the MCP. `board_start` inspects the issue's labe
 
 | Tier | Criteria (used by `classifyTier`) |
 |------|----------|
-| **Tier 1** (Full Process) | `type:feature`/`type:refactor`/`type:epic`/`type:breaking`/`type:architecture`/`type:integration` labels, or Tier 1 keywords (refactor, migration, rewrite, new feature, schema change, architecture) in title/body. |
-| **Tier 2** (Light Process) | `type:bug`/`type:fix`/`type:chore`/`type:docs`/`type:dependencies`/`type:typo`/`type:hotfix` labels, or Tier 2 keywords (fix, typo, bump, patch, hotfix, update dep). Also the policy for ambiguous cases. |
+| **Tier 1** (Full Process) | `type:feature`/`type:refactor`/`type:epic`/`type:security` labels, or Tier 1 keywords (refactor, migration, rewrite, new feature, schema change, architecture) in title/body. |
+| **Tier 2** (Light Process) | `type:bug`/`type:chore`/`type:docs`/`type:dependencies` labels, or Tier 2 keywords (fix, typo, bump, patch, hotfix, update dep). Also the policy for ambiguous cases. |
 
 Your job in this step: extract an explicit user override from the argument, if one was given.
 

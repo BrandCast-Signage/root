@@ -4,23 +4,16 @@ exports.classifyTier = classifyTier;
 /** Labels that signal Tier 1 (full process). */
 const TIER1_LABELS = new Set([
     "type:feature",
-    "type:enhancement",
     "type:refactor",
     "type:epic",
-    "type:breaking",
-    "type:architecture",
-    "type:integration",
+    "type:security",
 ]);
 /** Labels that signal Tier 2 (light process). */
 const TIER2_LABELS = new Set([
     "type:bug",
-    "type:fix",
     "type:chore",
     "type:docs",
     "type:dependencies",
-    "type:deps",
-    "type:typo",
-    "type:hotfix",
 ]);
 /** Title/body keywords that lean Tier 1. */
 const TIER1_KEYWORDS = [
