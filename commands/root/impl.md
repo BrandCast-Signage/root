@@ -44,7 +44,9 @@ This contract applies across **every** step of `/root:impl`. Read the stream's `
 
 **Target metric misses are not deviations.** If the plan has a "Target Metrics" section (LOC deltas, bundle size, test counts, etc.), missing a target is expected to be possible — those are directional, not contractual. Report actual vs target in the PR body's "Target Metrics" summary and proceed without surfacing it as a deviation.
 
-**The only legitimate halt in auto mode:** an unrecoverable failure you cannot fix after best-effort attempts (tests fail deterministically after multiple fix attempts; build is broken and no rollback succeeds; MCP/gh/network outage persists). In that case:
+**Database migration deviations are a mandatory halt in auto mode.** If a group touches a migration path (see Step 1) and the generated SQL diverges from the plan's Migration Safety section, OR any enumerated breaking-change risk is unaddressed by the generated SQL, OR the ORM workflow cannot be followed as documented — STOP and block. Do not auto-resolve. This is the one carve-out to the "decide and proceed" rule above. Migration shortcuts have repeatedly broken builds; the cost of halting is lower than the cost of a bad migration shipping under autoApprove.
+
+**The only legitimate halt in auto mode:** an unrecoverable failure you cannot fix after best-effort attempts (tests fail deterministically after multiple fix attempts; build is broken and no rollback succeeds; MCP/gh/network outage persists), OR a migration deviation per the rule above. In that case:
 
 1. Call `board_run` with a `blocked` signal (or update stream status to `blocked` via `updateStream` — the MCP tool handles this).
 2. Post a PR comment (if a PR exists) or a GitHub issue comment (if not) describing the failure, what you tried, and what needs human judgment.
@@ -112,6 +114,14 @@ Before executing any plan, validate it against this rubric. If the plan fails, s
 - At least one automated check (lint, type-check, or test command with specific pattern)
 - At least one concrete manual verification step (not "verify it works" — must describe what to do and what to expect)
 
+**If any Change Manifest path matches a migration pattern, the plan MUST have a "Database Migration Safety" section.** Migration patterns: `prisma/schema.prisma`, `prisma/migrations/**`, `**/migrations/**/*.sql`, `alembic/versions/**`, `db/migrate/**` (Rails), `**/migrations/*.py` (Django). The Migration Safety section MUST contain:
+- **Breaking-change enumeration**: explicit call-out for each of — nullability changes, column/table renames, column/table drops, type changes, index rebuilds that take write locks, data loss risk. For each, state "not applicable" or describe mitigation. "None" as a blanket answer fails the rubric.
+- **Generated-SQL verification step**: the exact SQL the migration is expected to produce, or the command the implementer will run to inspect generated SQL before applying it (e.g., `prisma migrate dev --create-only` then read the file). Plans that say "Prisma will handle it" fail the rubric.
+- **Rollout order**: which deploys in what order (schema → code, or code → schema → backfill, etc.). If the project has a documented migration workflow, reference it by path.
+- **Reversibility**: whether the migration is reversible, and if not, what the recovery plan is.
+
+If the plan touches migration paths but lacks this section, the rubric FAILS. Do not proceed.
+
 **Requirements and Verification items MUST be behavioral/capability-based, not metric-based.** Pass/fail contracts describe *what the system does* ("FamilyCast path removed," "byte-parity with v1 fixtures," "regression test added for renderDeep"). Quantitative targets (LOC delta, bundle size, test count, duplication percentage, performance numbers) belong in the plan's **Target Metrics** section — where missing the number is reported, not blocked.
 
 Reject any Requirement or Verification item matching patterns like:
@@ -149,8 +159,11 @@ Read the plan file. For Tier 1, extract:
 - **Dependency Graph**: Parse the mermaid graph. Solid arrows (`-->`) = hard dependencies. Dashed arrows (`.->`) = soft dependencies.
 - **Verification Plan**: Checklist items
 - **Coding Standards**: Checklist items
+- **Migration Safety** (if present): the section required by the rubric when any Change Manifest path matches a migration pattern
 
-For Tier 2: parse as a numbered step list. Skip to the Tier 2 section below.
+While parsing, build a **migration group set**: the set of Execution Group letters that contain at least one Change Manifest entry whose path matches a migration pattern (`prisma/schema.prisma`, `prisma/migrations/**`, `**/migrations/**/*.sql`, `alembic/versions/**`, `db/migrate/**`, `**/migrations/*.py`). This set drives prompt injection in Step 6.
+
+For Tier 2: parse as a numbered step list. Skip to the Tier 2 section below. Tier 2 plans that touch migration paths must be re-tiered — stop and report: "This plan modifies migration files. Re-plan as Tier 1 with a Migration Safety section."
 
 ### Step 2: Validate Against Rubric
 
@@ -295,6 +308,34 @@ For each group in the batch, make an Agent tool call with:
   - Validation commands from `root.config.json` → `validation`
   - Explicit instruction to mark each Change Manifest entry `[~]` on start and `[x] (<sha>)` on completion
   - Explicit instruction to commit in conventional format, one commit per logical unit within the group
+  - **If the group letter is in the migration group set (from Step 1)**, paste the full "Database Migration Safety" section from the plan AND the Migration Hard Rules block below, verbatim, into the prompt
+
+**Migration Hard Rules** (inline verbatim into implementer prompts for migration groups):
+
+```
+## Database Migration Hard Rules — READ BEFORE TOUCHING ANY MIGRATION FILE
+
+You are modifying database migration files. These rules are non-negotiable. Violating them has previously broken builds and cost hours.
+
+1. DO NOT guess ORM behavior. If this is Prisma, assume every rename is actually a DROP + ADD unless you have verified the generated SQL says otherwise. Same for type changes. Read the generated SQL before applying it.
+
+2. Use the project's migration workflow exactly as documented. For Prisma:
+   - `prisma migrate dev --create-only --name <name>` to generate migration SQL WITHOUT applying it
+   - Read the generated `.sql` file. Confirm it matches the intent described in the Change Manifest entry.
+   - Only then `prisma migrate dev` to apply, or commit the file and let the deploy pipeline apply it — whichever the project's docs specify.
+   - DO NOT use `prisma db push` for schema changes that will reach production.
+
+3. Before writing or applying the migration, work through the plan's Migration Safety section line by line:
+   - For each enumerated breaking-change risk (nullability, renames, drops, type changes, index locks, data loss): state in your commit body whether the generated SQL triggers that risk and how it is mitigated. If you cannot confirm, STOP and report.
+   - Confirm the generated SQL matches the "generated-SQL verification" expectation in the plan. If it diverges, STOP and report — do not "fix" by hand-editing the SQL unless the plan's Migration Safety section authorizes a specific edit with a stated reason.
+   - Follow the rollout order in the plan. Do not reorder.
+
+4. If you hand-edit generated migration SQL, add a comment in the SQL file explaining the exact reason and what Prisma/the ORM would have done instead. No silent edits.
+
+5. You are NOT authorized to deviate from the Migration Safety section under autoApprove. Migration deviations are the one category where autoApprove does not delegate judgment — STOP and surface a blocked signal on the board per the Autonomous Mode Contract.
+
+6. Triple-check before committing: (a) generated SQL read and matches intent, (b) every breaking-change risk explicitly addressed, (c) rollout order preserved. State each of these in the commit body.
+```
 
 Where a group has an associated test task, you may spawn `team-tester` in parallel with the implementer (same worktree) OR instruct the implementer to write tests itself — prefer the former for Tier 1 groups with non-trivial test surface.
 

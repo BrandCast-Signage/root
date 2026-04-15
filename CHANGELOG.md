@@ -5,6 +5,16 @@ All notable changes to the Root development workflow framework are documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.10] — 2026-04-15
+
+### Added
+
+- **Database migration safety enforcement.** Any plan whose Change Manifest touches migration paths (`prisma/schema.prisma`, `prisma/migrations/**`, `**/migrations/**/*.sql`, `alembic/versions/**`, `db/migrate/**`, `**/migrations/*.py`) now requires a "Database Migration Safety" section covering breaking-change enumeration, generated-SQL verification, rollout order, and reversibility. Plans without it fail the rubric.
+- `commands/root/impl.md` Step 1 builds a migration group set from Change Manifest file paths (deterministic, no keyword matching). Step 6 inlines a verbatim "Migration Hard Rules" block into every `team-implementer` prompt for groups in that set.
+- Autonomous Mode Contract now carves out migration deviations as a mandatory halt — autoApprove does not delegate judgment on migration-safety divergence. Implementer stops and blocks instead of auto-resolving.
+- `agents/team-implementer.md` rule #5: Migration Hard Rules in the prompt override every other operating rule, including autoApprove.
+- Tier 2 plans that touch migration paths are rejected at Step 1 with an instruction to re-plan as Tier 1.
+
 ## [2.1.9] — 2026-04-14
 
 ### Fixed
