@@ -5,6 +5,16 @@ All notable changes to the Root development workflow framework are documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] — 2026-04-16
+
+### Fixed
+
+- **MCP servers now upgrade to `@latest` automatically on session start.** Previously `hooks/scripts/ensure-mcp.sh` was install-if-missing only, so once installed, `mcp-local-rag` and `@brandcast_app/mcp-root-board` were frozen at whatever version a consumer first installed — every framework release silently failed to reach existing consumers. The hook now compares the installed version against the npm registry's `@latest` dist-tag for each package and runs `npm install <pkg>@latest` when they differ. Fails soft on offline / registry errors so missing network never blocks session start.
+
+### Why
+
+Discovered while verifying v2.2.0's tier-provenance fields against a live BrandCast session: the new schema-v2 stream records were not being written because the MCP server in `~/.root-framework/mcp/` was still at v0.2.2. The install hook had never run an upgrade since first install. Without this fix, every MCP-side change in 2.2.0 (and every future release) would have required every consumer to manually `npm install` to receive it.
+
 ## [2.2.0] — 2026-04-16
 
 ### Added

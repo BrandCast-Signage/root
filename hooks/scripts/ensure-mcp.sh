@@ -51,6 +51,41 @@ if [[ ! -f "$BOARD_BIN" ]]; then
   fi
 fi
 
+# --- Upgrade installed MCP servers to @latest if behind ---
+# Compares the installed version against npm's `@latest` dist-tag and upgrades
+# in place if they differ. Fails soft on offline / registry errors so a missing
+# network never blocks a session start.
+upgrade_if_stale() {
+  local pkg="$1"
+  local label="$2"
+
+  local pkg_json="$INSTALL_DIR/node_modules/$pkg/package.json"
+  if [[ ! -f "$pkg_json" ]]; then
+    return 0
+  fi
+
+  local installed
+  installed=$(node -p "require('$pkg_json').version" 2>/dev/null)
+  if [[ -z "$installed" ]]; then
+    return 0
+  fi
+
+  local latest
+  latest=$(npm view "$pkg" version 2>/dev/null)
+  if [[ -z "$latest" ]]; then
+    return 0
+  fi
+
+  if [[ "$installed" != "$latest" ]]; then
+    echo "Root: Upgrading $label MCP server ($installed → $latest)..."
+    cd "$INSTALL_DIR" || return 0
+    npm install "${pkg}@latest" --silent 2>&1
+  fi
+}
+
+upgrade_if_stale "mcp-local-rag" "RAG"
+upgrade_if_stale "@brandcast_app/mcp-root-board" "board"
+
 # --- Migrate config if needed ---
 if [[ -f "$CONFIG" ]]; then
   CONFIG_VERSION=$(python3 -c "import json; print(json.load(open('$CONFIG')).get('configVersion', 0))" 2>/dev/null || echo "0")
