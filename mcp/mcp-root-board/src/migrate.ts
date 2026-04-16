@@ -1,4 +1,4 @@
-import { SCHEMA_VERSION, StreamState } from "./types.js";
+import { SCHEMA_VERSION, StreamState, TierSource } from "./types.js";
 
 /**
  * Migrate a possibly-old schema object to the current {@link StreamState} shape.
@@ -15,7 +15,7 @@ export function migrate(state: unknown): StreamState {
 
   switch (version) {
     case 0: {
-      // v0 → v1: fill in fields introduced in schema version 1
+      // v0 → current: fill in fields introduced after v0.
       return {
         schemaVersion: SCHEMA_VERSION,
         issue: (raw["issue"] as StreamState["issue"]) ?? {
@@ -25,6 +25,8 @@ export function migrate(state: unknown): StreamState {
           state: "open",
         },
         tier: (raw["tier"] as StreamState["tier"]) ?? "tier2",
+        tierSource: "classifier",
+        tierReason: "unknown (pre-v2 record)",
         status: (raw["status"] as StreamState["status"]) ?? "queued",
         branch: (raw["branch"] as string) ?? "",
         worktreePath: (raw["worktreePath"] as string | null) ?? null,
@@ -39,6 +41,21 @@ export function migrate(state: unknown): StreamState {
       };
     }
 
+    case 1: {
+      // v1 → v2: backfill tier provenance fields. Pre-v2 records have no record
+      // of why a tier was chosen, so we mark them as classifier-derived with an
+      // explicit "unknown" reason rather than fabricating one.
+      const upgraded = { ...(raw as unknown as StreamState) };
+      upgraded.schemaVersion = SCHEMA_VERSION;
+      upgraded.tierSource = "classifier";
+      upgraded.tierReason = "unknown (pre-v2 record)";
+      // Preserve v1's other backfills.
+      if (upgraded.autoApprove === undefined) upgraded.autoApprove = false;
+      if (upgraded.parentIssue === undefined) upgraded.parentIssue = null;
+      if (upgraded.childIssues === undefined) upgraded.childIssues = [];
+      return upgraded;
+    }
+
     case SCHEMA_VERSION: {
       // Already at current version — backfill any fields added without a version bump.
       const current = raw as unknown as StreamState;
@@ -50,6 +67,12 @@ export function migrate(state: unknown): StreamState {
       }
       if (current.childIssues === undefined) {
         current.childIssues = [];
+      }
+      if (current.tierSource === undefined) {
+        current.tierSource = "classifier" as TierSource;
+      }
+      if (current.tierReason === undefined) {
+        current.tierReason = "unknown (pre-v2 record)";
       }
       return current;
     }

@@ -1,9 +1,11 @@
 /** Current schema version for StreamState. Increment when adding breaking changes. */
-export declare const SCHEMA_VERSION = 1;
+export declare const SCHEMA_VERSION = 2;
 /** Lifecycle status of a work stream. */
 export type StreamStatus = "queued" | "planning" | "plan-ready" | "approved" | "implementing" | "validating" | "pr-ready" | "merged" | "blocked" | "decomposed";
 /** Work complexity tier. Tier 1 requires human delegation; Tier 2 can be fully automated. */
 export type Tier = "tier1" | "tier2";
+/** Where the tier value on a stream came from. */
+export type TierSource = "classifier" | "override";
 /** AI harness handling a work group. */
 export type Harness = "claude" | "gemini";
 /** Progress status of an implementation group. */
@@ -42,6 +44,10 @@ export interface StreamState {
     issue: IssueContext;
     /** Complexity tier. */
     tier: Tier;
+    /** How the tier was decided — classifier output or caller-supplied override. */
+    tierSource: TierSource;
+    /** Human-readable justification for the tier. For "classifier", this is the classifier's reason; for "override", it is the caller-supplied justification. */
+    tierReason: string;
     /** Current lifecycle status. */
     status: StreamStatus;
     /** Git branch name for this stream. */

@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { IssueContext, SCHEMA_VERSION, StreamState, Tier } from "./types.js";
+import { IssueContext, SCHEMA_VERSION, StreamState, Tier, TierSource } from "./types.js";
 import { migrate } from "./migrate.js";
 
 /**
@@ -88,15 +88,25 @@ export function listStreams(rootDir: string): StreamState[] {
  *
  * @param issue - GitHub issue context for the new stream.
  * @param tier - Complexity tier for the stream.
+ * @param tierSource - Whether the tier came from the classifier or a caller-supplied override.
+ * @param tierReason - Human-readable justification for the tier (classifier reason or override justification).
  * @param rootDir - Absolute path to the consumer project root.
  * @returns The newly created and persisted {@link StreamState}.
  */
-export function createStream(issue: IssueContext, tier: Tier, rootDir: string): StreamState {
+export function createStream(
+  issue: IssueContext,
+  tier: Tier,
+  tierSource: TierSource,
+  tierReason: string,
+  rootDir: string
+): StreamState {
   const now = new Date().toISOString();
   const state: StreamState = {
     schemaVersion: SCHEMA_VERSION,
     issue,
     tier,
+    tierSource,
+    tierReason,
     status: "queued",
     branch: `issue-${issue.number}`,
     worktreePath: null,

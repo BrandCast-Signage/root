@@ -95,6 +95,23 @@ gh issue view <number> --json number,title,body,labels,state,assignees
 
 Store the result. The issue title, body, and labels inform tier classification and doc matching.
 
+### Step 2.5: Triage-status confirmation gate
+
+Only runs on **fresh stream creation** (Step 0 routed via the "no stream" branch). Skip if the stream already exists.
+
+If the issue's labels include `status:roadmap` or `status:backlog`, stop and confirm before continuing:
+
+- `status:roadmap` — on the immediate roadmap but not necessarily the next thing to pull.
+- `status:backlog` — has merit but is not prioritized for work.
+
+Both are signals that picking this up now may not be intentional. Use `AskUserQuestion` to confirm:
+
+> "Issue #<number> is labeled `<status:roadmap|status:backlog>`. Do you want to start work on it now?"
+
+- If the user declines, stop. Do not call `board_start`.
+- If the user confirms, continue to Step 3.
+- If `--auto` was extracted in Step 0, skip this gate — passing `--auto` on a roadmap/backlog issue is explicit pre-approval.
+
 ### Step 3: Extract tier override (if any)
 
 Tier classification is owned by the MCP. `board_start` inspects the issue's labels, title, and body via `classifyTier` (`mcp/mcp-root-board/src/classify.ts`) and writes a definite tier to the stream record. You do **not** classify tier yourself here.
@@ -106,9 +123,9 @@ Tier classification is owned by the MCP. `board_start` inspects the issue's labe
 
 Your job in this step: extract an explicit user override from the argument, if one was given.
 
-- If the user said "tier 1" / "full process" / "--tier 1" → pass `tier: "tier1"` to `board_start` in Step 6.
-- If the user said "tier 2" / "quick fix" / "--tier 2" → pass `tier: "tier2"`.
-- Otherwise pass no `tier` argument and let `classifyTier` decide.
+- If the user said "tier 1" / "full process" / "--tier 1" → pass `tier: "tier1"` AND `tierJustification: "<exact phrase the user used>"` to `board_start` in Step 6.
+- If the user said "tier 2" / "quick fix" / "--tier 2" → pass `tier: "tier2"` AND `tierJustification: "<exact phrase the user used>"`.
+- Otherwise pass no `tier` argument and let `classifyTier` decide. Do **not** invent a justification just to override the classifier — `board_start` will reject blank/whitespace `tierJustification` values, and the failure mode (a Tier 1 stream you mentally treat as Tier 2) is worse than letting the classifier decide.
 
 `board_start`'s response line (`Tier: tierX (reason)`) reports the classification and why. Surface the reason to the user in the Step 7 summary.
 
@@ -148,7 +165,7 @@ For each entry in `keywordMappings`, check if any `keywords` appear in the task 
 
 ### Step 6: Initialize session state
 
-Call `board_start` MCP tool with the issue number. If `--auto` was extracted in Step 0 AND this is a fresh stream (no prior stream existed), pass `autoApprove: true` as well — this sets the stream to fully autonomous so all gates (including Tier 1 `plan_approval`) auto-advance. If a tier override was extracted in Step 3, pass `tier: "tier1"` or `tier: "tier2"` accordingly; otherwise omit `tier` and the MCP will classify from issue data.
+Call `board_start` MCP tool with the issue number. If `--auto` was extracted in Step 0 AND this is a fresh stream (no prior stream existed), pass `autoApprove: true` as well — this sets the stream to fully autonomous so all gates (including Tier 1 `plan_approval`) auto-advance. If a tier override was extracted in Step 3, pass `tier: "tier1"` or `tier: "tier2"` accordingly **and** pass `tierJustification` quoting the user's actual words; otherwise omit both and the MCP will classify from issue data. `board_start` rejects an override with a blank `tierJustification`.
 
 > **Warning:** `board_start` is destructive on existing streams — it calls `createStream` which overwrites. Step 0's phase-aware dispatch ensures we only reach Step 6 when no stream exists (the "no stream" branch), so this is safe in practice.
 

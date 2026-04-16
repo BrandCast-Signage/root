@@ -123,15 +123,19 @@ function listStreams(rootDir) {
  *
  * @param issue - GitHub issue context for the new stream.
  * @param tier - Complexity tier for the stream.
+ * @param tierSource - Whether the tier came from the classifier or a caller-supplied override.
+ * @param tierReason - Human-readable justification for the tier (classifier reason or override justification).
  * @param rootDir - Absolute path to the consumer project root.
  * @returns The newly created and persisted {@link StreamState}.
  */
-function createStream(issue, tier, rootDir) {
+function createStream(issue, tier, tierSource, tierReason, rootDir) {
     const now = new Date().toISOString();
     const state = {
         schemaVersion: types_js_1.SCHEMA_VERSION,
         issue,
         tier,
+        tierSource,
+        tierReason,
         status: "queued",
         branch: `issue-${issue.number}`,
         worktreePath: null,

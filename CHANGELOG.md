@@ -5,6 +5,23 @@ All notable changes to the Root development workflow framework are documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] — 2026-04-16
+
+### Added
+
+- **Tier provenance is now persisted on every stream record.** `StreamState` gains two fields: `tierSource` (`"classifier" | "override"`) and `tierReason` (the classifier's reason text, or the caller-supplied justification when overriding). Surfaced by `board_status` and `board_start`'s response. Closes the gap where the only way to learn *why* a stream was Tier N was to re-read `classify.ts` and guess.
+- **`board_start` now requires a `tierJustification` whenever `tier` is supplied.** Bare overrides (passing `tier: "tier1"` with no reason) are rejected with a clear error. The MCP no longer accepts unmotivated tier overrides — agents have to type out *why* they are overriding the classifier, which is the moment unmotivated overrides become visible.
+- `mcp/mcp-root-board/src/types.ts`: `SCHEMA_VERSION` bumped to 2.
+- `mcp/mcp-root-board/src/migrate.ts`: v1 → v2 migration backfills `tierSource: "classifier"` and `tierReason: "unknown (pre-v2 record)"` on existing stream records. Records keep their original `tier` value — migration does not re-classify.
+
+### Why
+
+A stream record at `/Users/jduncan/Code/brandcast/.root/board/1567.json` was created with `tier: "tier1"` despite labels (`type:bug`, `area:infrastructure`, `type:chore`) that should have classified it as Tier 2. The agent that called `board_start` passed `tier: "tier1"` with no justification, then narrated to the user that the tier was "auto-inferred from body length" — a fabrication, since `classifyTier` has no length-based signals at all. v2.2.0 makes that class of mistake structurally impossible: the override path requires a justification at the API boundary, and the persisted `tierSource`/`tierReason` fields make every tier decision auditable after the fact.
+
+### Migration
+
+No action required. Existing v1 stream records are migrated transparently on next read; the backfilled `tierReason` is `"unknown (pre-v2 record)"`, which is honest about what we know.
+
 ## [2.1.10] — 2026-04-15
 
 ### Added

@@ -21,7 +21,7 @@ const rootDir = process.env["ROOT_DIR"] ?? process.cwd();
 
 const server = new McpServer({
   name: "root-board",
-  version: "0.1.0",
+  version: "0.3.0",
 });
 
 // ---------------------------------------------------------------------------
@@ -105,8 +105,27 @@ server.tool(
     autoApprove: z.boolean().optional().describe("When true, all gates auto-advance — fully autonomous even for Tier 1"),
     parentIssue: z.number().int().positive().optional().describe("Parent issue number if this stream is a decomposed sub-issue"),
     tier: z.enum(["tier1", "tier2"]).optional().describe("Explicit tier override (e.g. from a user-supplied --tier flag). When omitted, the tier is classified from issue labels and title/body."),
+    tierJustification: z.string().optional().describe("Required when `tier` is supplied. Explain why the caller is overriding the classifier (e.g. \"user passed --tier 1\", \"touches prisma/schema.prisma per database-migrations-tier1 rule\"). Rejected if blank or whitespace."),
   },
-  async ({ issue, autoApprove, parentIssue, tier: tierOverride }) => {
+  async ({ issue, autoApprove, parentIssue, tier: tierOverride, tierJustification }) => {
+    // Reject unmotivated overrides up front. Recording *why* a tier was forced
+    // is the whole point of v2's tierReason/tierSource — accepting a bare
+    // override would defeat it.
+    if (tierOverride !== undefined) {
+      const trimmed = tierJustification?.trim() ?? "";
+      if (trimmed.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `board_start: \`tier\` was supplied but \`tierJustification\` is missing or blank. Either omit \`tier\` (and let the classifier decide) or pass a non-empty \`tierJustification\` explaining the override.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+
     // Fetch issue context from GitHub.
     const issueData = getIssue(issue);
     const issueContext: IssueContext = {
@@ -117,11 +136,17 @@ server.tool(
     };
 
     // Resolve tier: user override wins, otherwise classify from the issue itself.
-    const classification = tierOverride
-      ? { tier: tierOverride, reason: "explicit override" }
-      : classifyTier(issueData);
+    const classification: { tier: "tier1" | "tier2"; reason: string; source: "classifier" | "override" } = tierOverride
+      ? { tier: tierOverride, reason: tierJustification!.trim(), source: "override" }
+      : { ...classifyTier(issueData), source: "classifier" };
 
-    const stream = createStream(issueContext, classification.tier, rootDir);
+    const stream = createStream(
+      issueContext,
+      classification.tier,
+      classification.source,
+      classification.reason,
+      rootDir
+    );
 
     // Set auto-approve and parent linkage if provided.
     const updates: Record<string, unknown> = {};
@@ -168,7 +193,7 @@ server.tool(
       `Branch:    ${updated.branch}`,
       `Worktree:  ${updated.worktreePath}`,
       `Status:    ${updated.status}`,
-      `Tier:      ${updated.tier} (${classification.reason})`,
+      `Tier:      ${updated.tier} (${classification.source}: ${classification.reason})`,
     ];
 
     return {
@@ -204,7 +229,7 @@ server.tool(
 
     const lines = [
       `Stream #${stream.issue.number}: ${stream.issue.title}`,
-      `Tier:       ${stream.tier}`,
+      `Tier:       ${stream.tier} (${stream.tierSource}: ${stream.tierReason})`,
       `Status:     ${stream.status}`,
       `Branch:     ${stream.branch}`,
       `Worktree:   ${stream.worktreePath ?? "(none)"}`,

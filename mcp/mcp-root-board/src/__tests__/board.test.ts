@@ -43,7 +43,7 @@ afterEach(() => {
 
 describe("createStream", () => {
   it("creates file at correct path with correct structure", () => {
-    const state = createStream(TEST_ISSUE, "tier2", tmpDir);
+    const state = createStream(TEST_ISSUE, "tier2", "classifier", "test fixture", tmpDir);
 
     const boardDir = path.join(tmpDir, ".root", "board");
     const filePath = path.join(boardDir, "42.json");
@@ -62,9 +62,25 @@ describe("createStream", () => {
   });
 
   it("includes parentIssue and childIssues defaults", () => {
-    const state = createStream(TEST_ISSUE, "tier2", tmpDir);
+    const state = createStream(TEST_ISSUE, "tier2", "classifier", "test fixture", tmpDir);
     expect(state.parentIssue).toBeNull();
     expect(state.childIssues).toEqual([]);
+  });
+
+  it("persists tierSource and tierReason as supplied by the caller", () => {
+    const state = createStream(
+      TEST_ISSUE,
+      "tier1",
+      "override",
+      "user passed --tier 1 because legal flagged this as Tier 1 work",
+      tmpDir
+    );
+    expect(state.tierSource).toBe("override");
+    expect(state.tierReason).toBe("user passed --tier 1 because legal flagged this as Tier 1 work");
+
+    const reread = readStream(tmpDir, 42)!;
+    expect(reread.tierSource).toBe("override");
+    expect(reread.tierReason).toBe("user passed --tier 1 because legal flagged this as Tier 1 work");
   });
 });
 
@@ -79,7 +95,7 @@ describe("readStream", () => {
   });
 
   it("returns typed state for existing stream", () => {
-    createStream(TEST_ISSUE, "tier1", tmpDir);
+    createStream(TEST_ISSUE, "tier1", "classifier", "test fixture", tmpDir);
     const result = readStream(tmpDir, 42);
 
     expect(result).not.toBeNull();
@@ -95,7 +111,7 @@ describe("readStream", () => {
 
 describe("writeStream", () => {
   it("does atomic write — no .tmp files remain after write", () => {
-    const state = createStream(TEST_ISSUE, "tier2", tmpDir);
+    const state = createStream(TEST_ISSUE, "tier2", "classifier", "test fixture", tmpDir);
     writeStream(tmpDir, 42, state);
 
     const boardDir = getBoardDir(tmpDir);
@@ -113,8 +129,8 @@ describe("writeStream", () => {
 
 describe("listStreams", () => {
   it("returns all streams sorted by issue number", () => {
-    createStream(TEST_ISSUE, "tier2", tmpDir);   // issue 42
-    createStream(TEST_ISSUE_2, "tier1", tmpDir); // issue 7
+    createStream(TEST_ISSUE, "tier2", "classifier", "test fixture", tmpDir);   // issue 42
+    createStream(TEST_ISSUE_2, "tier1", "classifier", "test fixture", tmpDir); // issue 7
 
     const streams = listStreams(tmpDir);
     expect(streams).toHaveLength(2);
@@ -134,7 +150,7 @@ describe("listStreams", () => {
 
 describe("updateStream", () => {
   it("merges partial updates and bumps updated timestamp", async () => {
-    createStream(TEST_ISSUE, "tier2", tmpDir);
+    createStream(TEST_ISSUE, "tier2", "classifier", "test fixture", tmpDir);
     const before = readStream(tmpDir, 42)!;
 
     // Ensure at least 1ms passes so updated timestamp changes
@@ -155,7 +171,7 @@ describe("updateStream", () => {
   });
 
   it("can set parentIssue and childIssues", () => {
-    createStream(TEST_ISSUE, "tier2", tmpDir);
+    createStream(TEST_ISSUE, "tier2", "classifier", "test fixture", tmpDir);
     const updated = updateStream(tmpDir, 42, { parentIssue: 100, childIssues: [201, 202] });
     expect(updated.parentIssue).toBe(100);
     expect(updated.childIssues).toEqual([201, 202]);
@@ -168,7 +184,7 @@ describe("updateStream", () => {
 
 describe("deleteStream", () => {
   it("removes the file", () => {
-    createStream(TEST_ISSUE, "tier2", tmpDir);
+    createStream(TEST_ISSUE, "tier2", "classifier", "test fixture", tmpDir);
     const boardDir = getBoardDir(tmpDir);
     expect(fs.existsSync(path.join(boardDir, "42.json"))).toBe(true);
 
@@ -218,12 +234,40 @@ describe("migrate integration via readStream", () => {
     expect(result.schemaVersion).toBe(SCHEMA_VERSION);
     expect(result.status).toBe("queued");
     expect(result.groups).toEqual({});
+    expect(result.tierSource).toBe("classifier");
+    expect(result.tierReason).toBe("unknown (pre-v2 record)");
   });
 
-  it("migrate backfills parentIssue and childIssues for existing streams", () => {
+  it("migrate v1 → v2 backfills tierSource and tierReason without overwriting other fields", () => {
+    const v1 = {
+      schemaVersion: 1,
+      issue: { number: 1567, title: "v1 record", labels: ["type:bug"], state: "open" },
+      tier: "tier1", // intentionally inconsistent with labels — exactly the bug v2 surfaces
+      status: "planning",
+      branch: "feat/1567-x",
+      worktreePath: "/tmp/wt",
+      planPath: null,
+      prdPath: null,
+      autoApprove: true,
+      parentIssue: null,
+      childIssues: [],
+      groups: {},
+      created: "2026-04-15T00:00:00.000Z",
+      updated: "2026-04-16T00:00:00.000Z",
+    };
+    const result = migrate(v1);
+    expect(result.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(result.tier).toBe("tier1"); // not rewritten by migrate
+    expect(result.tierSource).toBe("classifier");
+    expect(result.tierReason).toBe("unknown (pre-v2 record)");
+    expect(result.status).toBe("planning");
+    expect(result.autoApprove).toBe(true);
+  });
+
+  it("migrate backfills new fields when a current-version record is missing them", () => {
     getBoardDir(tmpDir); // ensure dir exists
     const boardDir = path.join(tmpDir, ".root", "board");
-    // Write a current-version stream that is missing the new fields
+    // Write a current-version stream that is missing the v2 fields (e.g. hand-edited)
     const stateWithoutNewFields = {
       schemaVersion: SCHEMA_VERSION,
       issue: { number: 200, title: "Old stream", labels: [], state: "open" },
@@ -248,6 +292,8 @@ describe("migrate integration via readStream", () => {
     expect(result).not.toBeNull();
     expect(result!.parentIssue).toBeNull();
     expect(result!.childIssues).toEqual([]);
+    expect(result!.tierSource).toBe("classifier");
+    expect(result!.tierReason).toBe("unknown (pre-v2 record)");
   });
 
   it("migrate() passes through current-version state unchanged", () => {
@@ -255,6 +301,8 @@ describe("migrate integration via readStream", () => {
       schemaVersion: SCHEMA_VERSION,
       issue: { number: 5, title: "y", labels: [], state: "open" },
       tier: "tier2",
+      tierSource: "classifier",
+      tierReason: "label \"type:bug\" matches Tier 2 policy",
       status: "implementing",
       branch: "issue-5",
       worktreePath: "/tmp/wt",
@@ -270,5 +318,6 @@ describe("migrate integration via readStream", () => {
     const result = migrate(current);
     expect(result).toBe(current); // same reference
     expect(result.status).toBe("implementing");
+    expect(result.tierSource).toBe("classifier");
   });
 });

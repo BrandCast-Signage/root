@@ -1,4 +1,4 @@
-import { IssueContext, StreamState, Tier } from "./types.js";
+import { IssueContext, StreamState, Tier, TierSource } from "./types.js";
 /**
  * Return the board directory path and ensure it exists.
  *
@@ -38,10 +38,12 @@ export declare function listStreams(rootDir: string): StreamState[];
  *
  * @param issue - GitHub issue context for the new stream.
  * @param tier - Complexity tier for the stream.
+ * @param tierSource - Whether the tier came from the classifier or a caller-supplied override.
+ * @param tierReason - Human-readable justification for the tier (classifier reason or override justification).
  * @param rootDir - Absolute path to the consumer project root.
  * @returns The newly created and persisted {@link StreamState}.
  */
-export declare function createStream(issue: IssueContext, tier: Tier, rootDir: string): StreamState;
+export declare function createStream(issue: IssueContext, tier: Tier, tierSource: TierSource, tierReason: string, rootDir: string): StreamState;
 /**
  * Merge a partial update into an existing stream and persist the result.
  *

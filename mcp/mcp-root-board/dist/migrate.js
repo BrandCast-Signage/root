@@ -16,7 +16,7 @@ function migrate(state) {
     const version = typeof raw["schemaVersion"] === "number" ? raw["schemaVersion"] : 0;
     switch (version) {
         case 0: {
-            // v0 → v1: fill in fields introduced in schema version 1
+            // v0 → current: fill in fields introduced after v0.
             return {
                 schemaVersion: types_js_1.SCHEMA_VERSION,
                 issue: raw["issue"] ?? {
@@ -26,6 +26,8 @@ function migrate(state) {
                     state: "open",
                 },
                 tier: raw["tier"] ?? "tier2",
+                tierSource: "classifier",
+                tierReason: "unknown (pre-v2 record)",
                 status: raw["status"] ?? "queued",
                 branch: raw["branch"] ?? "",
                 worktreePath: raw["worktreePath"] ?? null,
@@ -39,6 +41,23 @@ function migrate(state) {
                 updated: raw["updated"] ?? new Date().toISOString(),
             };
         }
+        case 1: {
+            // v1 → v2: backfill tier provenance fields. Pre-v2 records have no record
+            // of why a tier was chosen, so we mark them as classifier-derived with an
+            // explicit "unknown" reason rather than fabricating one.
+            const upgraded = { ...raw };
+            upgraded.schemaVersion = types_js_1.SCHEMA_VERSION;
+            upgraded.tierSource = "classifier";
+            upgraded.tierReason = "unknown (pre-v2 record)";
+            // Preserve v1's other backfills.
+            if (upgraded.autoApprove === undefined)
+                upgraded.autoApprove = false;
+            if (upgraded.parentIssue === undefined)
+                upgraded.parentIssue = null;
+            if (upgraded.childIssues === undefined)
+                upgraded.childIssues = [];
+            return upgraded;
+        }
         case types_js_1.SCHEMA_VERSION: {
             // Already at current version — backfill any fields added without a version bump.
             const current = raw;
@@ -50,6 +69,12 @@ function migrate(state) {
             }
             if (current.childIssues === undefined) {
                 current.childIssues = [];
+            }
+            if (current.tierSource === undefined) {
+                current.tierSource = "classifier";
+            }
+            if (current.tierReason === undefined) {
+                current.tierReason = "unknown (pre-v2 record)";
             }
             return current;
         }
