@@ -5,6 +5,22 @@ All notable changes to the Root development workflow framework are documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] — 2026-04-16
+
+### Changed
+
+- **`mcp-root-board` is now bundled inside the Claude plugin tarball.** Claude's `.mcp.json` references `${CLAUDE_PLUGIN_ROOT}/mcp/mcp-root-board/dist/index.js`, with npm dependencies installed to `${CLAUDE_PLUGIN_DATA}/mcp-root-board/node_modules` by a diff-based session-start hook. The shared `~/.root-framework/mcp/node_modules/@brandcast_app/mcp-root-board/` install dir is no longer used by the Claude plugin. Lockstep versioning between plugin and MCP code is now structural — the MCP code that ships in plugin v2.3.0 is, by construction, the code committed to git at the v2.3.0 tag.
+- `hooks/scripts/ensure-mcp.sh` rewritten: removed install + upgrade logic for `mcp-root-board` (no longer needed), kept the same logic for `mcp-local-rag` (third-party package, lives outside the plugin tree because of its 5MB+ native bindings). Added a diff-based dependency installer that runs `npm install --omit=dev` into `${CLAUDE_PLUGIN_DATA}/mcp-root-board/` only when the bundled `package.json` differs from the cached copy.
+- Gemini's `gemini-extension.json` continues to use the install-dir model for the board MCP — the bundling change is Claude-only for now.
+
+### Why
+
+The previous architecture pointed `.mcp.json` at a separate npm install dir (`~/.root-framework/mcp/`), which made the MCP code's lifecycle independent of the plugin's. Every release required publishing to npm AND consumers running an `npm install` (which `ensure-mcp.sh` couldn't do reliably until v2.2.1). The bundled approach is what Anthropic's plugin docs explicitly recommend (https://code.claude.com/docs/en/plugins-reference.md, "MCP servers" + "Persistent data directory"): plugins ship their server JS, install runtime deps to the persistent data dir, and lockstep versioning falls out for free.
+
+### Migration
+
+No action required for consumers. On next session start, the new `.mcp.json` points at the bundled binary and `ensure-mcp.sh` populates the `${CLAUDE_PLUGIN_DATA}/mcp-root-board/node_modules` cache. The orphan install at `~/.root-framework/mcp/node_modules/@brandcast_app/mcp-root-board/` can be deleted manually but is harmless if left in place.
+
 ## [2.2.1] — 2026-04-16
 
 ### Fixed

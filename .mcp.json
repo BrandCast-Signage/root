@@ -14,9 +14,10 @@
     "root-board": {
       "command": "node",
       "args": [
-        "${HOME}/.root-framework/mcp/node_modules/@brandcast_app/mcp-root-board/dist/index.js"
+        "${CLAUDE_PLUGIN_ROOT}/mcp/mcp-root-board/dist/index.js"
       ],
       "env": {
+        "NODE_PATH": "${CLAUDE_PLUGIN_DATA}/mcp-root-board/node_modules",
         "ROOT_DIR": "."
       }
     }

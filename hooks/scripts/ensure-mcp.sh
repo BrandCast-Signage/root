@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MIT
 # Ensure MCP servers are installed and configured on SessionStart.
-# - First run: installs mcp-local-rag and mcp-root-board into a unified framework directory
-# - Migrates root.config.json if schema is outdated
-# - If DB is empty and root.config.json exists: auto-ingests
-# - Checks gh CLI authentication for board GitHub features
+# - mcp-local-rag: third-party package; installed into ~/.root-framework/mcp/
+#   (separate install dir because of its 5MB+ native bindings) and upgraded to
+#   @latest if behind.
+# - mcp-root-board: bundled inside this plugin at ${CLAUDE_PLUGIN_ROOT}/mcp/...;
+#   only its npm dependencies are installed at runtime, into ${CLAUDE_PLUGIN_DATA}.
+#   The bundled approach gives us lockstep versioning between plugin and MCP code
+#   automatically — no upgrade logic needed for board.
+# - Migrates root.config.json if schema is outdated.
+# - If RAG DB is empty and root.config.json exists: auto-ingests.
+# - Checks gh CLI authentication for board GitHub features.
 
 # Consumer project root is $PWD (where the user launched the CLI)
 PROJECT_DIR="$PWD"
@@ -13,10 +19,18 @@ CONFIG="$PROJECT_DIR/root.config.json"
 # Plugin/extension root (for scripts)
 PLUGIN_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 
-# Unified installation directory
+# RAG installation directory (third-party package, lives outside plugin tree)
 INSTALL_DIR="${HOME}/.root-framework/mcp"
 RAG_BIN="$INSTALL_DIR/node_modules/mcp-local-rag/dist/index.js"
-BOARD_BIN="$INSTALL_DIR/node_modules/@brandcast_app/mcp-root-board/dist/index.js"
+
+# Board MCP — bundled in plugin tree; deps installed to per-plugin data dir.
+# CLAUDE_PLUGIN_ROOT and CLAUDE_PLUGIN_DATA are exported by Claude Code.
+# When this hook runs under Gemini, those vars are unset and the board deps
+# block is skipped (Gemini's gemini-extension.json still uses the install-dir
+# model for now).
+BOARD_PKG_SOURCE="${CLAUDE_PLUGIN_ROOT:-}/mcp/mcp-root-board/package.json"
+BOARD_DATA_DIR="${CLAUDE_PLUGIN_DATA:-}/mcp-root-board"
+BOARD_PKG_DATA="${BOARD_DATA_DIR}/package.json"
 
 # Current config schema version
 CURRENT_CONFIG_VERSION=2
@@ -36,55 +50,48 @@ if [[ ! -f "$RAG_BIN" ]]; then
   echo "Root: RAG MCP server installed successfully."
 fi
 
-# --- Install root-board if needed ---
-if [[ ! -f "$BOARD_BIN" ]]; then
-  echo "Root: Installing board MCP server..."
-  mkdir -p "$INSTALL_DIR"
-  cd "$INSTALL_DIR" || exit 1
-  npm init -y --silent 2>/dev/null
-  npm install @brandcast_app/mcp-root-board --silent 2>&1
-
-  if [[ ! -f "$BOARD_BIN" ]]; then
-    echo "Root: Failed to install mcp-root-board. Try running manually: cd $INSTALL_DIR && npm install mcp-root-board"
-  else
-    echo "Root: Board MCP server installed successfully."
-  fi
-fi
-
-# --- Upgrade installed MCP servers to @latest if behind ---
-# Compares the installed version against npm's `@latest` dist-tag and upgrades
-# in place if they differ. Fails soft on offline / registry errors so a missing
-# network never blocks a session start.
-upgrade_if_stale() {
-  local pkg="$1"
-  local label="$2"
-
-  local pkg_json="$INSTALL_DIR/node_modules/$pkg/package.json"
-  if [[ ! -f "$pkg_json" ]]; then
-    return 0
-  fi
+# --- Upgrade RAG to @latest if behind ---
+# Fails soft on offline / registry errors so a missing network never blocks
+# session start.
+upgrade_rag_if_stale() {
+  local pkg_json="$INSTALL_DIR/node_modules/mcp-local-rag/package.json"
+  [[ -f "$pkg_json" ]] || return 0
 
   local installed
   installed=$(node -p "require('$pkg_json').version" 2>/dev/null)
-  if [[ -z "$installed" ]]; then
-    return 0
-  fi
+  [[ -n "$installed" ]] || return 0
 
   local latest
-  latest=$(npm view "$pkg" version 2>/dev/null)
-  if [[ -z "$latest" ]]; then
-    return 0
-  fi
+  latest=$(npm view "mcp-local-rag" version 2>/dev/null)
+  [[ -n "$latest" ]] || return 0
 
   if [[ "$installed" != "$latest" ]]; then
-    echo "Root: Upgrading $label MCP server ($installed → $latest)..."
+    echo "Root: Upgrading RAG MCP server ($installed → $latest)..."
     cd "$INSTALL_DIR" || return 0
-    npm install "${pkg}@latest" --silent 2>&1
+    npm install "mcp-local-rag@latest" --silent 2>&1
   fi
 }
 
-upgrade_if_stale "mcp-local-rag" "RAG"
-upgrade_if_stale "@brandcast_app/mcp-root-board" "board"
+upgrade_rag_if_stale
+
+# --- Install board MCP deps into plugin data dir if package.json changed ---
+# The board MCP itself ships inside the plugin tarball at
+# ${CLAUDE_PLUGIN_ROOT}/mcp/mcp-root-board/dist/. Only its npm dependencies
+# need to be materialized at runtime, into the persistent per-plugin data
+# directory. We diff the bundled package.json against the cached copy to
+# detect when the plugin update introduced new/changed deps.
+if [[ -n "${CLAUDE_PLUGIN_ROOT:-}" && -n "${CLAUDE_PLUGIN_DATA:-}" && -f "$BOARD_PKG_SOURCE" ]]; then
+  if ! diff -q "$BOARD_PKG_SOURCE" "$BOARD_PKG_DATA" >/dev/null 2>&1; then
+    echo "Root: Installing board MCP dependencies..."
+    mkdir -p "$BOARD_DATA_DIR"
+    cp "$BOARD_PKG_SOURCE" "$BOARD_PKG_DATA"
+    if ! (cd "$BOARD_DATA_DIR" && npm install --omit=dev --silent 2>&1); then
+      # Roll back the cached package.json so the next session retries.
+      rm -f "$BOARD_PKG_DATA"
+      echo "Root: Failed to install board MCP dependencies. The next session will retry."
+    fi
+  fi
+fi
 
 # --- Migrate config if needed ---
 if [[ -f "$CONFIG" ]]; then
