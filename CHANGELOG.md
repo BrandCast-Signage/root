@@ -5,6 +5,12 @@ All notable changes to the Root development workflow framework are documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.2] — 2026-04-19
+
+### Fixed
+
+- `createWorktree` (mcp-root-board) now runs the appropriate `install` command (npm/pnpm/yarn/bun, detected by lockfile) immediately after `git worktree add` succeeds. Previously the new worktree had no `node_modules`, which caused consumer pre-commit hooks (husky, lint-staged, jest) to fail — often silently — on the first commit. The install streams output via `stdio: "inherit"` and throws loud on failure. No-op when the worktree has no `package.json`. Bumps bundled `@brandcast_app/mcp-root-board` to `0.3.1`.
+
 ## [2.3.1] — 2026-04-16
 
 ### Fixed

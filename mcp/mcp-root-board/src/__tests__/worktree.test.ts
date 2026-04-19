@@ -1,12 +1,17 @@
 import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import * as path from "node:path";
 
 jest.mock("node:child_process");
+jest.mock("node:fs");
 
 const mockExecSync = execSync as jest.MockedFunction<typeof execSync>;
+const mockExistsSync = existsSync as jest.MockedFunction<typeof existsSync>;
 
 import {
   createWorktree,
+  detectPackageManager,
+  installDependencies,
   listWorktrees,
   mergeWorktreeInto,
   removeWorktree,
@@ -14,6 +19,8 @@ import {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Default: no package.json — install is a no-op unless a test opts in.
+  mockExistsSync.mockReturnValue(false);
 });
 
 // ---------------------------------------------------------------------------
@@ -44,6 +51,120 @@ describe("createWorktree", () => {
     expect(() => createWorktree("/home/user/proj", 7, "issue-7")).toThrow(
       /Failed to create worktree/
     );
+  });
+
+  it("runs npm install in the new worktree when package.json is present", () => {
+    const projectDir = "/home/user/brandcast";
+    const expectedPath = path.resolve(projectDir, "..", "brandcast-42");
+
+    // package.json exists, no other lockfiles → npm.
+    mockExistsSync.mockImplementation((p) => {
+      return String(p) === path.join(expectedPath, "package.json");
+    });
+    mockExecSync.mockReturnValue("" as any);
+
+    createWorktree(projectDir, 42, "issue-42");
+
+    expect(mockExecSync).toHaveBeenCalledWith("npm install", {
+      cwd: expectedPath,
+      stdio: "inherit",
+    });
+  });
+
+  it("skips dependency install when there is no package.json", () => {
+    mockExistsSync.mockReturnValue(false);
+    mockExecSync.mockReturnValue("" as any);
+
+    createWorktree("/home/user/proj", 1, "issue-1");
+
+    // Only the git worktree add call, no install.
+    expect(mockExecSync).toHaveBeenCalledTimes(1);
+    expect(mockExecSync).toHaveBeenCalledWith(
+      expect.stringMatching(/^git worktree add/),
+      expect.anything()
+    );
+  });
+
+  it("surfaces a loud error when dependency install fails", () => {
+    const projectDir = "/home/user/brandcast";
+    const expectedPath = path.resolve(projectDir, "..", "brandcast-99");
+
+    mockExistsSync.mockImplementation((p) => {
+      return String(p) === path.join(expectedPath, "package.json");
+    });
+    mockExecSync.mockImplementation((cmd: any) => {
+      if (String(cmd).startsWith("git worktree add")) return "" as any;
+      throw new Error("npm ERR! peer dep conflict");
+    });
+
+    expect(() => createWorktree(projectDir, 99, "issue-99")).toThrow(
+      /Dependency install failed/
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// detectPackageManager / installDependencies
+// ---------------------------------------------------------------------------
+
+describe("detectPackageManager", () => {
+  const dir = "/home/user/proj";
+
+  it("returns null when there is no package.json", () => {
+    mockExistsSync.mockReturnValue(false);
+    expect(detectPackageManager(dir)).toBeNull();
+  });
+
+  it("returns npm when only package.json is present", () => {
+    mockExistsSync.mockImplementation((p) => String(p).endsWith("package.json"));
+    expect(detectPackageManager(dir)).toBe("npm");
+  });
+
+  it("prefers pnpm lockfile", () => {
+    mockExistsSync.mockImplementation((p) => {
+      const s = String(p);
+      return s.endsWith("package.json") || s.endsWith("pnpm-lock.yaml");
+    });
+    expect(detectPackageManager(dir)).toBe("pnpm");
+  });
+
+  it("detects yarn lockfile", () => {
+    mockExistsSync.mockImplementation((p) => {
+      const s = String(p);
+      return s.endsWith("package.json") || s.endsWith("yarn.lock");
+    });
+    expect(detectPackageManager(dir)).toBe("yarn");
+  });
+
+  it("detects bun lockfile", () => {
+    mockExistsSync.mockImplementation((p) => {
+      const s = String(p);
+      return s.endsWith("package.json") || s.endsWith("bun.lockb");
+    });
+    expect(detectPackageManager(dir)).toBe("bun");
+  });
+});
+
+describe("installDependencies", () => {
+  it("is a no-op when no package.json", () => {
+    mockExistsSync.mockReturnValue(false);
+    installDependencies("/tmp/empty");
+    expect(mockExecSync).not.toHaveBeenCalled();
+  });
+
+  it("uses pnpm install when pnpm-lock.yaml is present", () => {
+    mockExistsSync.mockImplementation((p) => {
+      const s = String(p);
+      return s.endsWith("package.json") || s.endsWith("pnpm-lock.yaml");
+    });
+    mockExecSync.mockReturnValue("" as any);
+
+    installDependencies("/tmp/proj");
+
+    expect(mockExecSync).toHaveBeenCalledWith("pnpm install", {
+      cwd: "/tmp/proj",
+      stdio: "inherit",
+    });
   });
 });
 

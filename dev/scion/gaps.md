@@ -67,41 +67,24 @@ Merits upstream consideration for ergonomics, but no longer blocks.
 
 ---
 
-### Gap 3 — Default templates ship team-internal Vertex routing config
+### Gap 3 — Default templates shipped team-internal Vertex routing config — ✅ FIXED UPSTREAM
 
-**Location:**
-- `$SCION_REPO/image-build/claude/scion-agent-home/.claude/settings.json` (or equivalent template home)
-- Same structure in the gemini template
+**Location:** `pkg/harness/claude/embeds/settings.json` and `pkg/harness/gemini/embeds/settings.json` (compiled into the `scion` CLI binary via `//go:embed`, stamped into `~/.scion/templates/` at `scion init` time). **Not** in the harness Dockerfiles under `image-build/`.
 
-**Evidence:** The claude template seeds `~/.claude/settings.json` into each agent with:
+**Original evidence:** Claude embed carried a Vertex env block (`CLAUDE_CODE_USE_VERTEX=1`, `ANTHROPIC_VERTEX_PROJECT_ID=duet01`, `@default` / `@20251001` model suffixes); Gemini embed carried `security.auth.selectedType: "gemini-api-key"`. Both hijacked OAuth silently.
 
-```json
-"env": {
-  "CLAUDE_CODE_USE_VERTEX": "1",
-  "CLOUD_ML_REGION": "global",
-  "ANTHROPIC_VERTEX_PROJECT_ID": "duet01",
-  "ANTHROPIC_MODEL": "claude-opus-4-6@default",
-  "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5@20251001"
-}
-```
+**Current state (verified 2026-04-13 against upstream `main`):**
 
-The gemini template hardcodes `security.auth.selectedType: "gemini-api-key"`.
+- Claude embed: only `ANTHROPIC_MODEL: "claude-opus-4-6"` and `ANTHROPIC_SMALL_FAST_MODEL: "claude-haiku-4-5"` — bare model names, provider-neutral, harmless.
+- Gemini embed: `security.auth: {}` — empty, auto-detection wins.
 
-Claude Code reads `settings.json` at startup and sets those env vars **internally** (see `Rq6()` in the bundled CLI: returns `true` if any `CLAUDE_CODE_USE_X` is set, which then makes `apiProvider = "third_party"` / Vertex before OAuth is ever consulted). So even after PR #66 establishes OAuth as a valid auth path, the default template's `env` block preempts it.
+Cleaned up in upstream commits `ed1f3d44` (`fix: pre-trust workspace and remove @default model suffix in Claude harness (#126)`), `c66f0a29` (`feat: add auth-based env key enforcement, schema enums, and cleanup stale gemini values`), `8933ee10` (`fix: protect env`).
 
-Hardcoded values:
-- `ANTHROPIC_VERTEX_PROJECT_ID=duet01` is a Scion-team-internal GCP project
-- Model strings `@default` and `@20251001` are Google-formatted variants specific to that project's Vertex Anthropic model garden
+**PR #66 status:** N/A. The original concern — that #66 would be a no-op because the template preempted OAuth — no longer applies. The template is now permissive.
 
-For any external user, this is silent hijacking.
+**What this means for `dev/scion/setup.md`:** the Step 4 env-block strip (`python3 -c "d.pop('env', None)"`) and Step 4b Gemini `selectedType` flip are obsolete for a fresh install off current upstream `main`. They remain documented in setup.md for anyone running an older Scion binary.
 
-**Suggested fix:** Either:
-- **Split templates** — move the Vertex routing into a `team/google` overlay; ship empty defaults.
-- **Gate by detected auth** — if the user has OAuth or API key available, don't emit the Vertex env block.
-
-**PR #66 status:** ❌ **not addressed.** PR #66 adds the OAuth path but doesn't touch the template. **This means the two changes must land together for the fix to actually work out-of-the-box.** Otherwise #66 is a no-op for users who only go through Scion templates.
-
-**Blocks:** #66's practical utility for external users.
+**Residual concern:** none for current main. If Scion ever reintroduces team-internal defaults, the original suggested fix (split into `team/google` overlay) stands.
 
 ---
 
@@ -198,42 +181,65 @@ We hit this multiple times: credentials seeded into the global template weren't 
 
 **Evidence:** Container has no `gh auth` state and no SSH keys. Agents cannot push branches, open PRs, or fetch from private remotes. Every Root 3.0 autonomous run must fall back to human-in-loop for the PR creation phase (Step 10b of `/root:impl`).
 
-**Suggested fix:** Either:
-- Generalize into a project-secrets mount spec (see gap 10)
-- Specifically propagate `~/.config/gh/hosts.yml` and `~/.ssh/id_*` with opt-in flags
+**Revised understanding (post-source-dive):** this is not a missing primitive — three propagation mechanisms already exist:
 
-**PR #66 status:** ❌ not addressed.
+1. **`volumes:` in `settings.yaml`** (`HarnessConfigEntry.Volumes []api.VolumeMount` at `pkg/config/settings_v1.go:539`, rendered as `-v` bind-mounts by `pkg/runtime/common.go:209-240`). Config-driven, local, no Hub needed. Works today for `~/.ssh/id_ed25519 → /home/scion/.ssh/id_ed25519`.
+2. **Template `home/` auto-copy** (`pkg/agent/provision.go:493-506`) — files dropped into `<template>/home/.ssh/id_ed25519` propagate to every agent.
+3. **Hub file-secrets** (`scion hub secret set --type file --target ... @~/path`) — fully functional via `writeFileSecrets` in `pkg/runtime/common.go:607-682`, but requires a Hub.
 
-**Root 3.0 impact:** HIGH. Autonomous PR flow requires this.
+**Suggested fix:** no new ssh-specific primitive; the cleaner upstream ask is to make mechanism #3 work without a Hub (covered under gap 10). Near-term, Root consumers use mechanism #1.
+
+**PR #66 status:** N/A — not an auth-resolution problem.
+
+**Root 3.0 impact:** HIGH for autonomous PR flow, but unblocked via existing `volumes:` pending the cleaner mechanism.
 
 ---
 
-### Gap 10 — No project-specific secrets propagation
+### Gap 10 — No local (no-Hub) host-path projection into file secrets
 
-**Evidence:** Real work on brandcast requires kubeconfig, AWS credentials, Stripe keys, Zoho OAuth tokens, database URLs. Scion has no opinionated spec for "mount these host paths as container paths."
+**Evidence:** Real work on brandcast requires kubeconfig, AWS credentials, Stripe keys, Zoho OAuth tokens, database URLs. The original framing was "Scion has no opinionated spec for mounting host paths" — but source review shows the file-secrets pipeline is already built and wired; it just gates on a Hub.
 
-**Suggested fix:** Grove `settings.yaml` gets a `secrets:` section:
+**What already exists (pipeline complete, end-to-end):**
+
+- `api.ResolvedSecret{Type, Target, Value}` at `pkg/api/types.go:494-501` — `Type: file` with base64 `Value` and container `Target`
+- `api.RequiredSecret{Key, Type, Target}` at `pkg/api/types.go:472-482` — declaration shape on `HarnessConfigEntry.Secrets` / `V1ProfileConfig.Secrets`
+- `writeFileSecrets` at `pkg/runtime/common.go:607-682` — stages files on host, creates parent dirs, emits `host:container:ro` mount specs
+- Plumbed through all three runtimes: `docker.go:53`, `podman.go:131`, `apple_container.go:53`
+- `scion hub secret set --type file --target /home/scion/.ssh/id_rsa SSH_KEY @~/.ssh/id_rsa` at `cmd/hub_secret.go:105` works today
+
+**What's missing:** `RequiredSecret` has no `HostPath` field — resolution routes through a Hub, not the local filesystem.
+
+**Suggested fix (narrow, additive):**
+
+1. Add a `HostPath` field to a new local `SecretMount` type (or extend `RequiredSecret`) in `pkg/config/settings_v1.go`
+2. Resolve it in `pkg/agent/run.go` near line 815, before `opts.ResolvedSecrets` assembly, by reading the host file and wrapping as `ResolvedSecret{Type: file, Target, Value: base64(contents)}`
+3. Inject into `runCfg.ResolvedSecrets` — `writeFileSecrets` and the runtime layer handle everything downstream, unchanged
+
+Example `settings.yaml` shape:
+
 ```yaml
-secrets:
-  kubeconfig:
-    host: ~/.kube/config
-    container: /home/scion/.kube/config
-    mode: ro
-  aws:
-    host: ~/.aws/credentials
-    container: /home/scion/.aws/credentials
-    mode: ro
-  gh:
-    host: ~/.config/gh/hosts.yml
-    container: /home/scion/.config/gh/hosts.yml
-    mode: ro
+harness_configs:
+  claude:
+    secrets:
+      - key: ssh_key
+        type: file
+        host_path: ~/.ssh/id_ed25519
+        target: /home/scion/.ssh/id_ed25519
+      - key: gh_hosts
+        type: file
+        host_path: ~/.config/gh/hosts.yml
+        target: /home/scion/.config/gh/hosts.yml
+      - key: kubeconfig
+        type: file
+        host_path: ~/.kube/config
+        target: /home/scion/.kube/config
 ```
 
-Default read-only; explicit opt-in per grove.
+Default read-only (already the case in `writeFileSecrets`). Covers ssh keys, gh tokens, kubeconfig, aws, db URLs — all via one unified mechanism.
 
-**PR #66 status:** ❌ not addressed.
+**PR #66 status:** ❌ not addressed, and orthogonal (#66 is auth-path; this is general file projection).
 
-**Root 3.0 impact:** HIGH for anything beyond self-contained code changes.
+**Root 3.0 impact:** HIGH for anything beyond self-contained code changes. Subsumes gap 9's ask.
 
 ---
 
@@ -241,14 +247,37 @@ Default read-only; explicit opt-in per grove.
 
 **Evidence:** Every fresh agent worktree pays the full `npm install` tax (~4 min for brandcast-sized monorepos). Multiplies with parallel agents — a 5-group execution batch incurs 20 minutes of npm install before any real work starts.
 
-**Suggested fix:** One of:
-- **Pre-warmed image layer per project** — `scion image build --project <grove>` produces a derived image with node_modules baked in
-- **Named volume mount** — shared node_modules volume per grove, wiped on dep changes
-- **Pre-start hook** with a host-side npm/pnpm cache mount
+**Revised understanding (post-source-dive):** image customization is already fully supported — this is not a missing Scion primitive.
 
-**PR #66 status:** ❌ not addressed.
+**What already works:**
 
-**Root 3.0 impact:** HIGH for performance; currently makes parallel execution economically unattractive.
+- `HarnessConfigEntry.Image` at `pkg/config/settings_v1.go:533` — per-harness image override in `settings.yaml`
+- `image_registry` at `settings_v1.go:235` — global registry rewrite
+- `--image` CLI flag at `cmd/start.go:45` — per-invocation override
+- `ScionConfig.Image` in template `scion-agent.yaml` at `pkg/api/types.go:314` — per-template pin
+- Base image hierarchy (`image-build/` — `core-base` → `scion-base` → harness) with `ARG BASE_IMAGE` on every harness Dockerfile supports `FROM scion-claude`-style derivation cleanly
+
+**Blessed path for a brandcast derived image:**
+
+```dockerfile
+FROM scion-local/scion-claude:latest
+COPY package.json package-lock.json /tmp/brandcast/
+RUN cd /tmp/brandcast && npm ci --no-audit --no-fund
+# stage node_modules at a known path; symlink into the workspace at agent start
+```
+
+Push to a registry, set `image: ghcr.io/brandcast/scion-claude-brandcast:<lockhash>` under a named `harness_configs:` entry, done.
+
+**Reframe:** this becomes a Root-side concern — "consumer-project derived-image pattern" — not an upstream Scion gap. Lives as a Root issue, not the Scion filing list.
+
+**What *would* be upstream nice-to-haves** (none load-bearing for Root 3.0):
+- `scion image build --project <grove>` CLI command
+- Lockfile-hash-triggered rebuild
+- Init-script hook at agent start for per-run dep re-install
+
+**PR #66 status:** N/A — not an auth problem.
+
+**Root 3.0 impact:** HIGH for performance, but unblocked today via image derivation. Needs Root-side tooling + docs, not Scion upstream work.
 
 ---
 
@@ -307,31 +336,36 @@ This is primarily a consumer-project problem (lockfile generation), not Scion's.
 |---|---|---|---|
 | 1 | Claude OAuth auth path | HIGH | ✅ SOLVED |
 | 2 | macOS Keychain propagation | HIGH | ⚠️ partial (wire format canonical) |
-| 3 | Default templates hardcode Vertex | HIGH | ❌ not addressed — **blocks #66's practical value** |
+| 3 | Default templates hardcode Vertex | HIGH | ✅ **FIXED UPSTREAM** (commits `ed1f3d44`, `c66f0a29`, `8933ee10`) |
 | 4 | No `--prompt-file` flag | MED | ❌ |
 | 5 | Token refresh is manual | MED | ⚠️ simpler post-merge |
 | 6 | No `--auth <method>` flag | MED | ✅ indirectly via `auth_selectedType` |
 | 7 | Build script forces docker-container driver | MED | ❌ |
 | 8 | Grove template drift | MED | ❌ |
-| 9 | No `gh`/SSH propagation | LOW (HIGH for 3.0) | ❌ |
-| 10 | No project secrets propagation | LOW (HIGH for 3.0) | ❌ |
-| 11 | No `node_modules` cache strategy | LOW (HIGH for 3.0) | ❌ |
+| 9 | No `gh`/SSH propagation | LOW (HIGH for 3.0) | N/A — solvable via existing `volumes:`; subsumed by gap 10's cleaner ask |
+| 10 | No local host-path projection (no-Hub) | LOW (HIGH for 3.0) | N/A — pipeline exists, missing `HostPath` field on `RequiredSecret` |
+| 11 | No `node_modules` cache strategy | LOW (HIGH for 3.0) | N/A — image derivation supported; this is Root-side tooling, not a Scion gap |
 | 12 | Telemetry schema undocumented | LOW (HIGH for 3.0) | ❌ |
 | 13 | Container memory defaults | LOW | ❌ |
 | 14 | Lockfile platform pinning | LOW | ❌ (out of scope) |
 
 ## Recommended filing sequence
 
-1. **Companion to PR #66: template split** — gap 3. Most urgent because without it, #66 is a no-op for external users.
+1. ~~**Companion to PR #66: template split** — gap 3.~~ **No longer needed — already fixed upstream.**
 2. **`--prompt-file` flag** — gap 4. Easy implementation; unblocks reliable envelope transport for any Scion consumer.
 3. **Pre-start hook for credential refresh** — gap 5. Proper long-term primitive.
 4. **Telemetry schema docs** — gap 12. Ship blocker for Root 3.0 reconciliation.
-5. **Build script `--driver` flag** — gap 7. Small, self-contained, removes first-time-setup friction. Already have the patch on `root/local-docker-driver` branch.
-6. **Everything else** — as Scion team bandwidth allows.
+5. **Local host-path projection on file secrets** — gap 10 (subsumes gap 9). Narrow, additive, reuses existing `writeFileSecrets` machinery. Draft at `dev/scion/upstream-issues.md`. Candidate for Root-authored PR.
+6. **Build script `--driver` flag** — gap 7. Small, self-contained, removes first-time-setup friction. Already have the patch on `root/local-docker-driver` branch.
+7. **Grove template refresh** — gap 8. Medium-sized design question (overlay vs. command).
+8. **Container memory config** — gap 13. Low priority.
+
+Gaps 9 and 11 do not need upstream filings; see their revised entries.
 
 ## Cross-references
 
 - `dev/scion/setup.md` — the full setup recipe, documents the workarounds for all HIGH-severity gaps
+- `dev/scion/upstream-issues.md` — drafts of issues to file against Scion; currently holds the gap 10 merged draft
 - Root 3.0 tracking issues: #2, #3, #4, #5, #6 in `BrandCast-Signage/root`
 - brandcast PR [#1487](https://github.com/BrandCast-Signage/brandcast/pull/1487) — first real-world Scion-dispatched fix (draft, do-not-merge)
 - Scion PR [#66](https://github.com/GoogleCloudPlatform/scion/pull/66) — closes gap 1, partial on gap 2

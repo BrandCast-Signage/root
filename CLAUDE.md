@@ -48,6 +48,13 @@ Both harnesses share a per-project RAG database at `.root/rag-db` (relative to c
 
 The `root` skill (in `skills/root/SKILL.md`) is the main workflow entry point, invoked as `/root <task>`.
 
+## Issue Status Labels
+
+- `status:roadmap` — actively in our immediate plans for development.
+- `status:backlog` — issue/idea with merit, but not prioritized for work yet. (Replaces `status:deferred`.)
+
+When `/root` is invoked on an issue carrying either label (fresh stream only), it MUST stop and confirm the user actually wants to pick up that issue before creating the stream. `--auto` bypasses the confirmation (explicit pre-approval).
+
 ## Dual-Harness Rules
 
 **BEFORE making any code change, load the dual-harness rules** (`dev/dual-harness/SKILL.md`). It contains verified rules for shared vs harness-specific files, environment variables, command naming, CLI usage, and config schemas. Every mistake in this project has come from not checking those rules first. This file is NOT shipped to consumers — it lives in `dev/` for Root framework development only.

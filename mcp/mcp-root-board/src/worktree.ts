@@ -1,5 +1,53 @@
 import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import * as path from "node:path";
+
+/**
+ * Detect the JS package manager for a directory based on its lockfile.
+ * Returns `null` if there is no `package.json` (nothing to install).
+ * Falls back to `npm` when `package.json` exists but no lockfile is present.
+ */
+export function detectPackageManager(
+  dir: string
+): "npm" | "pnpm" | "yarn" | "bun" | null {
+  if (!existsSync(path.join(dir, "package.json"))) return null;
+  if (existsSync(path.join(dir, "pnpm-lock.yaml"))) return "pnpm";
+  if (existsSync(path.join(dir, "yarn.lock"))) return "yarn";
+  if (existsSync(path.join(dir, "bun.lockb"))) return "bun";
+  return "npm";
+}
+
+const INSTALL_COMMAND: Record<"npm" | "pnpm" | "yarn" | "bun", string> = {
+  npm: "npm install",
+  pnpm: "pnpm install",
+  yarn: "yarn install",
+  bun: "bun install",
+};
+
+/**
+ * Install JS dependencies in `worktreePath` if it contains a `package.json`.
+ *
+ * Fresh `git worktree add` does not copy `node_modules`, which means any
+ * pre-commit hooks that depend on installed binaries (husky, lint-staged,
+ * jest) will fail on the first commit. We run the install eagerly and
+ * stream output so failures are loud.
+ *
+ * No-op when there is no `package.json`.
+ *
+ * @throws {Error} If the install command fails.
+ */
+export function installDependencies(worktreePath: string): void {
+  const pm = detectPackageManager(worktreePath);
+  if (!pm) return;
+
+  const cmd = INSTALL_COMMAND[pm];
+  try {
+    execSync(cmd, { cwd: worktreePath, stdio: "inherit" });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Dependency install failed in ${worktreePath} (${cmd}): ${msg}`);
+  }
+}
 
 /**
  * Create a git worktree for the given issue and branch.
@@ -25,6 +73,8 @@ export function createWorktree(projectDir: string, issue: number, branch: string
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`Failed to create worktree at ${worktreePath}: ${msg}`);
   }
+
+  installDependencies(worktreePath);
 
   return worktreePath;
 }

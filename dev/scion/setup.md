@@ -6,6 +6,10 @@
 
 **Status:** Spike-quality. All patches are local to this machine / grove. None have been pushed upstream or committed to a consumer repo's git tree. Each patch in here has a corresponding "Upstream Feedback" note at the bottom.
 
+**See also:**
+- `dev/scion/gaps.md` — gap analysis (Gap 3 now fixed upstream; this doc still reflects the older state)
+- `dev/scion/custom-images.md` — the smaller, up-to-date path for Root 3.0 initial testing (Scion source fork, rebuilt binary, Docker disk hygiene)
+
 ---
 
 ## Prereqs
@@ -116,9 +120,11 @@ For Gemini: see the Gemini section below. The flow is simpler because Scion's ge
 
 ## Step 4: Strip the Vertex routing block from the template
 
-The stock Scion claude template seeds `~/.claude/settings.json` inside each agent with a hardcoded `env` block that forces Vertex AI routing through the Scion team's internal `duet01` GCP project. This silently defeats our `.credentials.json` OAuth token even when it's present — Claude Code reads settings.json, sets `CLAUDE_CODE_USE_VERTEX=1` internally, and chooses the third-party provider path.
+> **Obsolete on current upstream `main`** (as of commits `ed1f3d44`, `c66f0a29`, `8933ee10`). The embedded templates in `pkg/harness/{claude,gemini}/embeds/settings.json` no longer carry the Vertex env block or Gemini `selectedType` hijack. If you built `scion` from upstream `main` (or our `root/local-docker-driver` branch) on or after 2026-04-13, **skip this step**. Kept here for anyone running an older binary. See `dev/scion/gaps.md` gap 3 for details.
 
-Remove the `env` block from the global template:
+The historic stock Scion claude template seeded `~/.claude/settings.json` inside each agent with a hardcoded `env` block that forced Vertex AI routing through the Scion team's internal `duet01` GCP project. This silently defeated the `.credentials.json` OAuth token even when it was present — Claude Code reads settings.json, sets `CLAUDE_CODE_USE_VERTEX=1` internally, and chooses the third-party provider path.
+
+Remove the `env` block from the global template (only needed on older Scion builds):
 
 ```bash
 python3 -c "
@@ -136,11 +142,13 @@ Keep everything else (hooks, permissions, autoUpdater, telemetry). The removed k
 
 ## Step 4b: Gemini harness (Gemini Code Assist / CLI OAuth)
 
+> **Mostly obsolete on current upstream `main`.** The embedded Gemini template now ships with `security.auth: {}` (empty), so auto-detection of `~/.gemini/oauth_creds.json` wins by default — no `selectedType` flip needed. The OAuth creds seeding below is still useful for `--no-auth` launches.
+
 The Gemini harness has better auth bones than Claude's: `pkg/harness/gemini_cli.go:393-431` has a first-class OAuth path that auto-detects `~/.gemini/oauth_creds.json` on the host and bind-mounts it into the container (at `~/.gemini/oauth_creds.json` again). Scion even sets the right env var (`GEMINI_DEFAULT_AUTH_TYPE=oauth-personal`) automatically.
 
-**The only problem:** the stock gemini template ships with an explicit `security.auth.selectedType: "gemini-api-key"` in `~/.gemini/settings.json`. When the container starts, Gemini CLI reads that settings file first and commits to the API-key path before any OAuth creds are consulted. Without a `GEMINI_API_KEY` env var set, it would silently ask for one or fail.
+**Historic problem (fixed upstream):** the stock gemini template used to ship with an explicit `security.auth.selectedType: "gemini-api-key"` in `~/.gemini/settings.json`. When the container starts, Gemini CLI reads that settings file first and commits to the API-key path before any OAuth creds are consulted. Without a `GEMINI_API_KEY` env var set, it would silently ask for one or fail.
 
-**Fix:** flip the selectedType to `oauth-personal` in the template:
+**Historic fix (only needed on older Scion builds):** flip the selectedType to `oauth-personal` in the template:
 
 ```bash
 python3 -c "

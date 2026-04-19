@@ -1,4 +1,23 @@
 /**
+ * Detect the JS package manager for a directory based on its lockfile.
+ * Returns `null` if there is no `package.json` (nothing to install).
+ * Falls back to `npm` when `package.json` exists but no lockfile is present.
+ */
+export declare function detectPackageManager(dir: string): "npm" | "pnpm" | "yarn" | "bun" | null;
+/**
+ * Install JS dependencies in `worktreePath` if it contains a `package.json`.
+ *
+ * Fresh `git worktree add` does not copy `node_modules`, which means any
+ * pre-commit hooks that depend on installed binaries (husky, lint-staged,
+ * jest) will fail on the first commit. We run the install eagerly and
+ * stream output so failures are loud.
+ *
+ * No-op when there is no `package.json`.
+ *
+ * @throws {Error} If the install command fails.
+ */
+export declare function installDependencies(worktreePath: string): void;
+/**
  * Create a git worktree for the given issue and branch.
  *
  * The worktree is placed as a sibling of `projectDir`, named
