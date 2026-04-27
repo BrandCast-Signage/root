@@ -1,8 +1,15 @@
 import { Tier } from "./types.js";
 
-/** Labels that signal Tier 1 (full process). */
+/**
+ * Labels that signal Tier 1 (full process).
+ *
+ * `type:feature` is intentionally NOT here. The triage tooling labels far too
+ * many issues as features (most of them small), so the label alone is not a
+ * reliable Tier 1 signal. Feature issues fall through to keyword analysis and
+ * land Tier 1 only if their title/body says so (e.g. "schema change",
+ * "migration", "architecture").
+ */
 const TIER1_LABELS = new Set<string>([
-  "type:feature",
   "type:refactor",
   "type:epic",
   "type:security",
@@ -24,7 +31,6 @@ const TIER1_KEYWORDS = [
   "rewrite",
   "integrate",
   "integration",
-  "new feature",
   "schema change",
   "architecture",
   "multi-package",

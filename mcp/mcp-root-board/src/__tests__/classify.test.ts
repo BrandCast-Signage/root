@@ -2,10 +2,18 @@ import { classifyTier } from "../classify.js";
 
 describe("classifyTier", () => {
   describe("label precedence", () => {
-    it("type:feature → tier1", () => {
+    it("type:feature alone → tier2 (label is not a Tier 1 signal; triage over-applies it)", () => {
       const result = classifyTier({ title: "anything", labels: ["type:feature"] });
+      expect(result.tier).toBe("tier2");
+    });
+
+    it("type:feature with Tier 1 keywords in title → tier1 via keywords", () => {
+      const result = classifyTier({
+        title: "Feature: schema change for billing",
+        labels: ["type:feature"],
+      });
       expect(result.tier).toBe("tier1");
-      expect(result.reason).toMatch(/type:feature/);
+      expect(result.reason).toMatch(/schema change/);
     });
 
     it("type:bug → tier2 even if title has tier1 keywords", () => {
@@ -28,14 +36,14 @@ describe("classifyTier", () => {
     });
 
     it("label matching is case-insensitive", () => {
-      const result = classifyTier({ title: "x", labels: ["TYPE:Feature"] });
+      const result = classifyTier({ title: "x", labels: ["TYPE:Refactor"] });
       expect(result.tier).toBe("tier1");
     });
 
     it("first matching type label wins — tier1 before tier2", () => {
       const result = classifyTier({
         title: "x",
-        labels: ["type:feature", "type:bug"],
+        labels: ["type:refactor", "type:bug"],
       });
       expect(result.tier).toBe("tier1");
     });
