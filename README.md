@@ -164,10 +164,21 @@ updated: 2026-03-10
 | Field | Values |
 |-------|--------|
 | `title` | Non-empty string |
-| `type` | `doc`, `plan`, `prd`, `adr`, `guide`, `spec`, `research`, `service`, `api`, `package`, `module` |
-| `status` | `draft`, `active`, `completed`, `deferred`, `cancelled`, `superseded`, `archived` |
+| `type` | `doc`, `plan`, `prd`, `adr`, `pattern`, `guide`, `spec`, `research`, `service`, `api`, `package`, `module` |
+| `status` | Type-scoped — see table below |
 | `created` | `YYYY-MM-DD` |
 | `updated` | `YYYY-MM-DD` (must be >= `created`, no future dates) |
+
+Valid `status:` values depend on the doc's `type:`, so ADRs, patterns, and research notes can keep their conventional vocabularies instead of being forced onto the lifecycle set:
+
+| Type(s) | Valid `status:` values |
+|---------|------------------------|
+| `plan`, `prd` | `draft`, `active`, `completed`, `deferred`, `cancelled`, `superseded`, `archived` |
+| `adr` | `proposed`, `accepted`, `rejected`, `deprecated`, `superseded` |
+| `pattern` | `investigating`, `draft`, `decided`, `active`, `deprecated`, `superseded`, `archived` |
+| `research` | `draft`, `active`, `archived` |
+| `doc`, `guide`, `spec`, `service`, `api`, `package`, `module` | `draft`, `active`, `deprecated`, `archived` |
+| _unknown / missing type_ | default: `draft`, `active`, `completed`, `deferred`, `cancelled`, `superseded`, `archived` |
 
 A write-time hook warns when `.md` files in doc directories are saved without valid frontmatter.
 
