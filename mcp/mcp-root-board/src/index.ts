@@ -6,7 +6,9 @@ import { classifyTier } from "./classify.js";
 import { evaluateGate, getNextTransition, loadGateConfig } from "./gates.js";
 import { analyzeGraph, extractMermaidBlock } from "./graph.js";
 import { addComment, getIssue, getIssueLabels, removeLabel, setLabel } from "./github.js";
+import { loadNotificationConfig, sendDiscord } from "./notify.js";
 import { loadGithubProjectConfig, setProjectStatusInProgress } from "./project.js";
+import { appendSharedContext, getSharedContext } from "./sharedContext.js";
 import { IssueContext } from "./types.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
 
@@ -28,6 +30,20 @@ const server = new McpServer({
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Run `fn` and swallow any thrown error, logging it to stderr with `label`
+ * for context. Used wherever we call out to gh / GraphQL / a webhook and
+ * do not want a transient external failure to break a real workflow.
+ */
+function nonFatal(label: string, fn: () => void): void {
+  try {
+    fn();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[${label}] non-fatal failure: ${msg}`);
+  }
+}
 
 /**
  * Slugify a string for use in a branch name segment.
@@ -181,27 +197,41 @@ server.tool(
       branch: branchName,
     });
 
-    // Label the issue — non-fatal if gh is not authenticated.
-    try {
-      setLabel(issue, "root:planning");
-    } catch {
-      // gh not authenticated or label doesn't exist — ignore.
-    }
+    nonFatal("setLabel:root:planning", () => setLabel(issue, "root:planning"));
 
     // Sync the linked GitHub Project v2 item to "In Progress" — feature is
     // gated on `board.githubProject` being present in `root.config.json`.
-    // Failures (auth, missing IDs, GraphQL errors) are non-fatal: the
-    // stream is real, the project mirror is a nice-to-have.
     const projectCfg = loadGithubProjectConfig(rootDir);
     if (projectCfg !== null) {
-      try {
+      nonFatal("project:setStatus", () => {
         setProjectStatusInProgress(issue, projectCfg);
         if (projectCfg.mirrorLabel !== undefined) {
-          try { setLabel(issue, projectCfg.mirrorLabel); } catch { /* ignore */ }
+          nonFatal("setLabel:mirror", () => setLabel(issue, projectCfg.mirrorLabel!));
         }
-      } catch {
-        // GraphQL call failed — surface in stderr by Node default but don't fail board_start.
-      }
+      });
+    }
+
+    // Notify when an autonomous run is going to park on a human gate.
+    // We can detect this today by tier-1 + autoApprove=false: the plan_approval
+    // gate will pause the run pending human review. Single-issue runs without
+    // autoApprove also notify, but the human is presumably at the keyboard;
+    // this is mainly to make multi-issue / overnight epic runs visible.
+    const notifyCfg = loadNotificationConfig(rootDir);
+    if (notifyCfg !== null && classification.tier === "tier1" && autoApprove !== true) {
+      void sendDiscord(
+        "human_gate",
+        {
+          title: `Tier 1 plan approval needed: #${issue}`,
+          url: `https://github.com/${process.env["GITHUB_REPOSITORY"] ?? ""}/issues/${issue}`,
+          description: `Stream #${issue} started at tier 1 — plan_approval gate will pause for human review.`,
+          fields: [
+            { name: "Title", value: updated.issue.title },
+            { name: "Tier reason", value: classification.reason },
+            { name: "Branch", value: updated.branch ?? "(unset)" },
+          ],
+        },
+        notifyCfg
+      );
     }
 
     const lines = [
@@ -215,6 +245,64 @@ server.tool(
 
     return {
       content: [{ type: "text", text: lines.join("\n") }],
+    };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tools: board_shared_get / board_shared_append
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "board_shared_get",
+  "Read the shared-context markdown for an epic / batch stream. Returns empty string if no notes yet.",
+  {
+    epicIssue: z.number().int().positive().describe("Issue number of the epic / batch parent stream"),
+  },
+  async ({ epicIssue }) => {
+    const text = getSharedContext(rootDir, epicIssue);
+    return {
+      content: [{ type: "text", text: text.length > 0 ? text : "(no shared context yet)" }],
+    };
+  }
+);
+
+server.tool(
+  "board_shared_append",
+  "Append a timestamped note to an epic / batch stream's shared-context. On overflow (>32KB) fires a blocker notification and returns isError so the caller stops dispatching further children.",
+  {
+    epicIssue: z.number().int().positive().describe("Issue number of the epic / batch parent stream"),
+    note: z.string().min(1).describe("Markdown note. Format readably; this content gets read by every subsequent subagent."),
+  },
+  async ({ epicIssue, note }) => {
+    const result = appendSharedContext(rootDir, epicIssue, note);
+    if (result.overflow) {
+      const notifyCfg = loadNotificationConfig(rootDir);
+      if (notifyCfg !== null) {
+        void sendDiscord(
+          "blocker",
+          {
+            title: `Shared-context overflow on #${epicIssue}`,
+            description: `Shared-context file exceeded the 32KB limit (now ${result.bytes} bytes). Run is paused — review and trim before continuing.`,
+            fields: [{ name: "Epic", value: `#${epicIssue}` }],
+          },
+          notifyCfg
+        );
+      }
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Shared-context overflow on #${epicIssue}: ${result.bytes} bytes (limit ${32 * 1024}). Stop dispatching further children and trim manually.`,
+          },
+        ],
+        isError: true,
+      };
+    }
+    return {
+      content: [
+        { type: "text", text: `Appended to shared-context for #${epicIssue} (${result.bytes} bytes).` },
+      ],
     };
   }
 );
