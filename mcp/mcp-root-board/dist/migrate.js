@@ -37,6 +37,9 @@ function migrate(state) {
                 parentIssue: raw["parentIssue"] ?? null,
                 childIssues: raw["childIssues"] ?? [],
                 groups: raw["groups"] ?? {},
+                kind: "issue",
+                epicChildren: [],
+                epicBranch: null,
                 created: raw["created"] ?? new Date().toISOString(),
                 updated: raw["updated"] ?? new Date().toISOString(),
             };
@@ -56,6 +59,13 @@ function migrate(state) {
                 upgraded.parentIssue = null;
             if (upgraded.childIssues === undefined)
                 upgraded.childIssues = [];
+            // 2.4 fields.
+            if (upgraded.kind === undefined)
+                upgraded.kind = "issue";
+            if (upgraded.epicChildren === undefined)
+                upgraded.epicChildren = [];
+            if (upgraded.epicBranch === undefined)
+                upgraded.epicBranch = null;
             return upgraded;
         }
         case types_js_1.SCHEMA_VERSION: {
@@ -75,6 +85,16 @@ function migrate(state) {
             }
             if (current.tierReason === undefined) {
                 current.tierReason = "unknown (pre-v2 record)";
+            }
+            // 2.4 fields — added without a schema bump since they're additive optionals.
+            if (current.kind === undefined) {
+                current.kind = "issue";
+            }
+            if (current.epicChildren === undefined) {
+                current.epicChildren = [];
+            }
+            if (current.epicBranch === undefined) {
+                current.epicBranch = null;
             }
             return current;
         }

@@ -6,6 +6,7 @@ exports.getIssueLabels = getIssueLabels;
 exports.setLabel = setLabel;
 exports.removeLabel = removeLabel;
 exports.addComment = addComment;
+exports.getSubIssues = getSubIssues;
 exports.createPR = createPR;
 const node_child_process_1 = require("node:child_process");
 /**
@@ -100,6 +101,34 @@ function addComment(issue, body) {
     (0, node_child_process_1.execFileSync)("gh", ["issue", "comment", String(issue), "--body", body], {
         encoding: "utf-8",
     });
+}
+/**
+ * Fetch the sub-issues of a GitHub issue, in declared order.
+ *
+ * Uses the `subIssues` connection on `Issue` (introduced with GitHub's
+ * native sub-issues feature). The query is repo-aware via the same
+ * owner/repo `gh` resolves locally.
+ *
+ * @param issue - Parent issue number.
+ * @returns Child issue numbers in the order GitHub returns them, which
+ *   matches the order they were linked under the parent.
+ * @throws {Error} If the `gh api graphql` call fails. Unlike Project sync,
+ *   this is non-recoverable for epic mode — the orchestrator needs the
+ *   list of children before it can dispatch anything.
+ */
+function getSubIssues(issue) {
+    const repoJson = (0, node_child_process_1.execSync)("gh repo view --json owner,name", { encoding: "utf-8" });
+    const { owner, name } = JSON.parse(repoJson);
+    const query = `query($owner:String!,$repo:String!,$num:Int!){repository(owner:$owner,name:$repo){issue(number:$num){subIssues(first:100){nodes{number}}}}}`;
+    const out = (0, node_child_process_1.execFileSync)("gh", [
+        "api", "graphql",
+        "-f", `query=${query}`,
+        "-f", `owner=${owner.login}`,
+        "-f", `repo=${name}`,
+        "-F", `num=${issue}`,
+    ], { encoding: "utf-8" });
+    const parsed = JSON.parse(out);
+    return parsed.data.repository.issue.subIssues.nodes.map((n) => n.number);
 }
 /**
  * Create a pull request via the `gh` CLI.

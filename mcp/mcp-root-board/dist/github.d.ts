@@ -54,6 +54,21 @@ export declare function removeLabel(issue: number, label: string): void;
  */
 export declare function addComment(issue: number, body: string): void;
 /**
+ * Fetch the sub-issues of a GitHub issue, in declared order.
+ *
+ * Uses the `subIssues` connection on `Issue` (introduced with GitHub's
+ * native sub-issues feature). The query is repo-aware via the same
+ * owner/repo `gh` resolves locally.
+ *
+ * @param issue - Parent issue number.
+ * @returns Child issue numbers in the order GitHub returns them, which
+ *   matches the order they were linked under the parent.
+ * @throws {Error} If the `gh api graphql` call fails. Unlike Project sync,
+ *   this is non-recoverable for epic mode — the orchestrator needs the
+ *   list of children before it can dispatch anything.
+ */
+export declare function getSubIssues(issue: number): number[];
+/**
  * Create a pull request via the `gh` CLI.
  *
  * @param head - Head branch name.
