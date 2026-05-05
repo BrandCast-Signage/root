@@ -1,6 +1,6 @@
 {
   "name": "@brandcast_app/mcp-root-board",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "MCP server for Root framework board orchestration — manages work streams, worktree lifecycle, GitHub integration, and gate-based auto-progression",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

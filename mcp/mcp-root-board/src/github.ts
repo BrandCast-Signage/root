@@ -113,6 +113,42 @@ export function addComment(issue: number, body: string): void {
 }
 
 /**
+ * Fetch the sub-issues of a GitHub issue, in declared order.
+ *
+ * Uses the `subIssues` connection on `Issue` (introduced with GitHub's
+ * native sub-issues feature). The query is repo-aware via the same
+ * owner/repo `gh` resolves locally.
+ *
+ * @param issue - Parent issue number.
+ * @returns Child issue numbers in the order GitHub returns them, which
+ *   matches the order they were linked under the parent.
+ * @throws {Error} If the `gh api graphql` call fails. Unlike Project sync,
+ *   this is non-recoverable for epic mode — the orchestrator needs the
+ *   list of children before it can dispatch anything.
+ */
+export function getSubIssues(issue: number): number[] {
+  const repoJson = execSync("gh repo view --json owner,name", { encoding: "utf-8" });
+  const { owner, name } = JSON.parse(repoJson) as { owner: { login: string }; name: string };
+
+  const query = `query($owner:String!,$repo:String!,$num:Int!){repository(owner:$owner,name:$repo){issue(number:$num){subIssues(first:100){nodes{number}}}}}`;
+  const out = execFileSync(
+    "gh",
+    [
+      "api", "graphql",
+      "-f", `query=${query}`,
+      "-f", `owner=${owner.login}`,
+      "-f", `repo=${name}`,
+      "-F", `num=${issue}`,
+    ],
+    { encoding: "utf-8" }
+  );
+  const parsed = JSON.parse(out) as {
+    data: { repository: { issue: { subIssues: { nodes: Array<{ number: number }> } } } };
+  };
+  return parsed.data.repository.issue.subIssues.nodes.map((n) => n.number);
+}
+
+/**
  * Create a pull request via the `gh` CLI.
  *
  * @param head - Head branch name.

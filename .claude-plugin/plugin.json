@@ -1,7 +1,7 @@
 {
   "name": "root",
   "description": "Development workflow framework — tier-based planning, doc-aware context gathering, RAG-powered search, session tracking, and implementation plan generation",
-  "version": "2.3.3",
+  "version": "2.4.0",
   "author": {
     "name": "BrandCast",
     "email": "dev@brandcast.app"
@@ -23,7 +23,8 @@
     "./agents/specialist-backend.md",
     "./agents/specialist-database.md",
     "./agents/specialist-devops.md",
-    "./agents/specialist-frontend.md"
+    "./agents/specialist-frontend.md",
+    "./agents/issue-readiness-grader.md"
   ],
   "mcpServers": ["./.mcp.json"]
 }

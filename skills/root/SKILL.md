@@ -1,7 +1,7 @@
 ---
 name: root
 description: "Start or continue a Root development session for a GitHub issue. On first invocation classifies tier, loads docs via RAG, and plans. On re-invocation drives the stream through implementation, review, and merge. Also handles orchestration verbs (list, status, approve, run, sync, delete, clean, reset)."
-argument-hint: "#<issue> [description] [--auto] | list | status #<issue> | approve #<issue> | run | sync | delete #<issue> | clean | reset"
+argument-hint: "#<issue> [description] [--auto] | #<epic> --auto | #<x> #<y> #<z> --auto --batch | list | status #<issue> | approve #<issue> | run | sync | delete #<issue> | clean | reset"
 user-invocable: true
 ---
 
@@ -29,7 +29,15 @@ Parse the first token of the argument.
 
 **Flag extraction.** Before matching verbs or issue numbers, scan the argument for these flags and remove them from the token stream:
 - `--auto` — set the `autoApprove` flag. Effect depends on entry path (see below).
+- `--batch` — explicit batch-mode signal. Required when the argument contains 2+ issue numbers; rejected with one issue. Forces `--auto` (batch without auto is meaningless).
 - `--groups A,B` — limit execution to specific groups (passed through to `/root:impl`).
+
+**Multi-issue invocation.** Count issue numbers in the argument. If 2+:
+- Without `--batch`: reject — "Multiple issue numbers require `--batch`. Did you mean `/root #x #y #z --auto --batch`?"
+- With `--batch` but without `--auto`: implicitly add `--auto`, surface a one-line note ("`--batch` implies `--auto`").
+- With both: proceed to **Autonomous Multi-Issue Mode** (below) instead of phase-aware dispatch.
+
+**Single-issue + `--auto`.** Single issue with `--auto` runs the readiness gate (below) before falling through to phase-aware dispatch. This is the existing single-issue autonomous path with the new gate in front.
 
 **Reserved orchestration verbs** — if the first token matches one of these, dispatch and stop (no session init):
 
@@ -298,3 +306,116 @@ After the user approves the plan (exits plan mode), hand off to `/root:impl`:
 > - **Manual**: Run `/root:impl` to execute step by step, or `/root:impl status` to review the plan."
 
 The plan file is the source of truth — `/root:impl` reads the Change Manifest and Execution Groups directly. No intermediate task list is needed.
+
+## Autonomous Multi-Issue Mode
+
+Triggered by `/root #<epic> --auto` (epic mode) or `/root #x #y #z --auto --batch` (batch mode). Both share the same orchestration spine; they differ only in how children are resolved.
+
+### Orchestration spine
+
+The orchestrator runs in this main harness conversation. Each child issue is dispatched as a `Agent` tool subagent with `isolation: worktree` so per-child execution does NOT consume the orchestrator's context. The orchestrator's only jobs are: readiness gating, sequencing, shared-context curation, PR assembly, and notification.
+
+**Critical context-window discipline.** Everything load-bearing for resuming the run after auto-compaction must be on disk in the shared-context file, not in the conversation. This includes: which children have completed, which is currently running, the running child's worktree path, the partial PR URL once opened, and any architectural decisions a future child needs. Treat the conversation as scratch space; treat shared-context as the durable state.
+
+### Step A0: Readiness gate (mandatory in autonomous mode)
+
+Before creating any stream:
+
+1. For epic mode: collect the epic issue number plus its children (via `gh api graphql` sub-issues query, same shape as `getSubIssues`).
+   For batch mode: the explicit list from the argument.
+2. For each issue (epic + every child, or every batch member), spawn the `issue-readiness-grader` agent. Pass the issue number; the agent reads the body via `gh issue view` and returns strict JSON.
+3. Collect verdicts. If any return `needs-clarification`, **enter the interview loop** (next step). Do NOT skip, do NOT offer a `--force` flag, do NOT bypass.
+4. Only when every issue grades `ready` does the orchestrator proceed to Step A1.
+
+### Step A1: Interview loop (entered on any `needs-clarification`)
+
+Round budget: **3 grading rounds total**. Round 4 is a hard stop.
+
+Per round:
+
+1. Aggregate concerns and questions across all issues that failed. Print a concise per-issue panel:
+   ```
+   #<n>: <title>
+     Concerns: <list of short concern identifiers>
+     Questions:
+       1. <question>
+       2. <question>
+   ```
+2. Ask the user. Use `AskUserQuestion` for the answers — one block per issue, with a free-form text input. Allow the user to type `abort` at any prompt to cancel the run; allow `skip <n>` to drop a specific child from the run (epic mode only — batch members are explicit, dropping one is the user's call to re-invoke).
+3. For each issue with answers, append a `## Clarifications (added by /root readiness gate, <ISO-timestamp>)` section to the issue body via `gh issue edit <n> --body "<full new body>"`. Quote each question and the user's answer underneath.
+4. Re-grade every issue that just received clarifications.
+5. If all issues now grade `ready`, exit the loop and proceed to Step A2.
+6. If the round counter is at 3 and any issue still grades `needs-clarification`, hard-stop with: "After 3 rounds the readiness gate is still failing. Either the rubric is wrong or the issue needs hand-revision before Root can take it. Concerns remaining: <list>." Do not create any stream.
+
+### Step A2: Create parent stream
+
+Call `board_epic_start({ epicIssue, mode, children })`:
+- `mode: "epic"` — `children` argument omitted; the MCP resolves via sub-issues.
+- `mode: "batch"` — `children` array is the explicit list from the argument.
+
+The parent stream's branch is `feat/epic-<n>-<slug>` or `chore/batch-<n>-<slug>`. Create the worktree at this branch (use the same `createWorktree` machinery `board_start` uses; reuse via the parent's recorded `branch`).
+
+Append a kickoff note to shared-context:
+```
+board_shared_append({
+  epicIssue: <n>,
+  note: "Run started. Mode: <epic|batch>. Children in order: <list>. Branch: <epicBranch>."
+})
+```
+
+### Step A3: Per-child dispatch loop
+
+For each child in declared order:
+
+1. **Tier check.** Call `board_status` on the child if a stream already exists; otherwise pre-classify via `gh issue view` + the same heuristics `classifyTier` uses. In **batch mode**, any tier-1 child triggers a hard stop (`sendDiscord('blocker', ...)`) — batch is for tier-2 sweeps only. In **epic mode**, tier-1 children are allowed but their `plan_approval` gate will pause the run; the parent's `autoApprove` does NOT cascade to children automatically (per-child `autoApprove` is set in the next step).
+
+2. **Read shared-context.** Call `board_shared_get({ epicIssue: <parent> })`. Pass the contents into the subagent prompt so the child has the same orientation as everyone before it.
+
+3. **Spawn subagent.** Use the `Agent` tool with `isolation: worktree`, `subagent_type: team-implementer` (or a more specific specialist if `root.config.json` mappings suggest one), and a prompt that:
+   - Tells the child what issue it owns (`#<n>`)
+   - Includes the full shared-context
+   - Tells the child to commit DIRECTLY onto the parent's `epicBranch` (not a per-child branch) and to stop after committing — no PR creation per child
+   - Tells the child to emit a structured "Result" block at the end: commits made, files touched, deviations from the issue body, target metrics
+   - Sets `autoApprove: true` for the child stream so its own gates don't pause the run
+
+4. **Collect result.** Wait for subagent return. Parse the Result block.
+
+5. **Append summary to shared-context.** One concise entry per child: issue number, commit SHAs, files touched, deviations, target metrics. This is what protects against auto-compact — the orchestrator may forget what the child did, but the file remembers.
+
+6. **Update / open PR.** On first completed child: open the PR as draft (`gh pr create --draft --base main --head <epicBranch>`). On every subsequent child: `gh pr edit` to refresh the body, adding the new `Closes #<n>` line and the new check entry. PR title:
+   - Epic: `<epic-title> (epic #<epic-num>)`
+   - Batch: `chore: batch fixes (#x, #y, #z)`
+   PR body sketch:
+   ```
+   Autonomous <epic|batch> run.
+
+   - [x] #101 — <title> (sha: abc123)
+   - [x] #102 — <title> (sha: def456)
+   - [ ] #103 — pending
+
+   Closes #101
+   Closes #102
+   ```
+
+7. **Project sync per child.** `board_start` already sets the child's Project Status to `In Progress` (issue #8). The native PR-linked workflow will move each `Closes #<n>` issue to `Review` once the PR is opened.
+
+8. **On child failure or hard-stop.** Stop dispatching further children. Fire `sendDiscord('blocker', ...)` with the failed issue number and reason. Update the PR body with a `⚠ Partial completion` callout above the checklist. PR stays draft. Update parent stream status to `epic-blocked` or `epic-partial`. Append a concluding note to shared-context.
+
+### Step A4: Run completion
+
+When all children complete successfully:
+
+1. Append final note to shared-context summarizing the run.
+2. Update parent stream status to `epic-complete`.
+3. Fire `sendDiscord('epic_complete', ...)` with the PR URL.
+4. PR stays draft until the user explicitly flips it to ready (deliberate — gives the user a final chance to scan the assembled diff before review starts). Print: "Epic #<n> complete. PR #<pr-num> is ready for review (currently draft). Flip to ready with `gh pr ready <pr-num>` when satisfied."
+
+### Auto-compact resilience
+
+Re-invoking `/root #<epic> --auto` on a partially-completed epic should pick up where it left off:
+
+1. `board_status` on the epic returns `kind: 'epic'`, `status: 'epic-running' | 'epic-blocked' | 'epic-partial'`.
+2. The orchestrator loads shared-context, identifies the last completed child by scanning the file's checklist entries, and dispatches the next pending child in the declared order.
+3. The PR exists; the orchestrator updates it rather than creating a new one.
+
+This means: **never destroy shared-context mid-run.** The 32KB overflow trigger is intentional — silent truncation would defeat resumability.

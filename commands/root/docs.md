@@ -251,11 +251,27 @@ Frontmatter schema validation.
 2. For each, read first 20 lines and check:
    - Has `---` delimiters
    - Has `title:` (non-empty)
-   - Has `status:` with valid value: draft, active, completed, deferred, cancelled, superseded, archived
+   - Has `status:` with a value valid **for the doc's `type:`** — see vocabulary table below
    - Has `created:` in YYYY-MM-DD format
    - Has `updated:` in YYYY-MM-DD format
    - `updated` >= `created`
    - No future dates
+
+### Type-scoped status vocabularies
+
+Different doc kinds carry different community conventions for status. The valid set depends on the `type:` field. If `type:` is missing or unrecognized, fall back to the default vocabulary.
+
+| Type(s) | Valid `status:` values |
+|---------|------------------------|
+| `plan`, `prd` | `draft`, `active`, `completed`, `deferred`, `cancelled`, `superseded`, `archived` |
+| `adr` | `proposed`, `accepted`, `rejected`, `deprecated`, `superseded` |
+| `pattern` | `investigating`, `draft`, `decided`, `active`, `deprecated`, `superseded`, `archived` |
+| `research` | `draft`, `active`, `archived` |
+| `doc`, `guide`, `spec`, `service`, `api`, `package`, `module` | `draft`, `active`, `deprecated`, `archived` |
+| _unknown / missing type_ | default: `draft`, `active`, `completed`, `deferred`, `cancelled`, `superseded`, `archived` |
+
+A `status:` value that's not in the type's set is an **error**. A `type:` value not in the table above produces a separate **warning** (not error) so users are nudged toward the canonical taxonomy without blocking on it.
+
 3. Group failures by error type:
    ```
    Frontmatter Validation:
@@ -268,9 +284,16 @@ Frontmatter schema validation.
      status: 5 files
      updated: 2 files
 
+   Invalid status for type:
+     adr with status=active: 4 files (expected one of: proposed, accepted, rejected, deprecated, superseded)
+     pattern with status=investigating: 2 files (no vocabulary defined for type=pattern; using default — did you mean type=research?)
+
    Invalid values:
      Future dates: 1 file (docs/dev/app/FOO.md: updated: 2026-12-01)
      updated < created: 0 files
+
+   Warnings:
+     Unknown type values: 3 files (type=concept, type=note) — falling back to default status vocabulary
    ```
 
 ## `fix [path]`

@@ -1,11 +1,14 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { createStream, deleteStream, listStreams, readStream, updateStream } from "./board.js";
+import { createEpicStream, createStream, deleteStream, listStreams, readStream, updateStream } from "./board.js";
 import { classifyTier } from "./classify.js";
 import { evaluateGate, getNextTransition, loadGateConfig } from "./gates.js";
 import { analyzeGraph, extractMermaidBlock } from "./graph.js";
-import { addComment, getIssue, getIssueLabels, removeLabel, setLabel } from "./github.js";
+import { addComment, getIssue, getIssueLabels, getSubIssues, removeLabel, setLabel } from "./github.js";
+import { loadNotificationConfig, sendDiscord } from "./notify.js";
+import { loadGithubProjectConfig, setProjectStatusInProgress } from "./project.js";
+import { appendSharedContext, getSharedContext } from "./sharedContext.js";
 import { IssueContext } from "./types.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
 
@@ -21,12 +24,26 @@ const rootDir = process.env["ROOT_DIR"] ?? process.cwd();
 
 const server = new McpServer({
   name: "root-board",
-  version: "0.3.0",
+  version: "0.4.0",
 });
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Run `fn` and swallow any thrown error, logging it to stderr with `label`
+ * for context. Used wherever we call out to gh / GraphQL / a webhook and
+ * do not want a transient external failure to break a real workflow.
+ */
+function nonFatal(label: string, fn: () => void): void {
+  try {
+    fn();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[${label}] non-fatal failure: ${msg}`);
+  }
+}
 
 /**
  * Slugify a string for use in a branch name segment.
@@ -180,11 +197,41 @@ server.tool(
       branch: branchName,
     });
 
-    // Label the issue — non-fatal if gh is not authenticated.
-    try {
-      setLabel(issue, "root:planning");
-    } catch {
-      // gh not authenticated or label doesn't exist — ignore.
+    nonFatal("setLabel:root:planning", () => setLabel(issue, "root:planning"));
+
+    // Sync the linked GitHub Project v2 item to "In Progress" — feature is
+    // gated on `board.githubProject` being present in `root.config.json`.
+    const projectCfg = loadGithubProjectConfig(rootDir);
+    if (projectCfg !== null) {
+      nonFatal("project:setStatus", () => {
+        setProjectStatusInProgress(issue, projectCfg);
+        if (projectCfg.mirrorLabel !== undefined) {
+          nonFatal("setLabel:mirror", () => setLabel(issue, projectCfg.mirrorLabel!));
+        }
+      });
+    }
+
+    // Notify when an autonomous run is going to park on a human gate.
+    // We can detect this today by tier-1 + autoApprove=false: the plan_approval
+    // gate will pause the run pending human review. Single-issue runs without
+    // autoApprove also notify, but the human is presumably at the keyboard;
+    // this is mainly to make multi-issue / overnight epic runs visible.
+    const notifyCfg = loadNotificationConfig(rootDir);
+    if (notifyCfg !== null && classification.tier === "tier1" && autoApprove !== true) {
+      void sendDiscord(
+        "human_gate",
+        {
+          title: `Tier 1 plan approval needed: #${issue}`,
+          url: `https://github.com/${process.env["GITHUB_REPOSITORY"] ?? ""}/issues/${issue}`,
+          description: `Stream #${issue} started at tier 1 — plan_approval gate will pause for human review.`,
+          fields: [
+            { name: "Title", value: updated.issue.title },
+            { name: "Tier reason", value: classification.reason },
+            { name: "Branch", value: updated.branch ?? "(unset)" },
+          ],
+        },
+        notifyCfg
+      );
     }
 
     const lines = [
@@ -198,6 +245,129 @@ server.tool(
 
     return {
       content: [{ type: "text", text: lines.join("\n") }],
+    };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool: board_epic_start
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "board_epic_start",
+  "Start a parent stream for an autonomous multi-issue run. For mode='epic', children are fetched from the parent's GitHub sub-issues. For mode='batch', children must be supplied explicitly. Does NOT execute children — that's the orchestrator's job.",
+  {
+    epicIssue: z.number().int().positive().describe("GitHub issue number of the epic / batch parent"),
+    mode: z.enum(["epic", "batch"]).describe("'epic' resolves children via the GitHub sub-issues connection; 'batch' uses the explicit `children` array"),
+    children: z.array(z.number().int().positive()).optional().describe("Required for mode='batch'; ignored for mode='epic'"),
+  },
+  async ({ epicIssue, mode, children }) => {
+    if (mode === "batch" && (children === undefined || children.length === 0)) {
+      return {
+        content: [
+          { type: "text", text: "board_epic_start: mode='batch' requires a non-empty `children` array." },
+        ],
+        isError: true,
+      };
+    }
+
+    const issueData = getIssue(epicIssue);
+    const issueContext: IssueContext = {
+      number: issueData.number,
+      title: issueData.title,
+      labels: issueData.labels,
+      state: issueData.state,
+    };
+
+    let resolvedChildren: number[];
+    if (mode === "epic") {
+      resolvedChildren = getSubIssues(epicIssue);
+      if (resolvedChildren.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `board_epic_start: #${epicIssue} has no linked sub-issues. Either link children first, or use mode='batch' with an explicit list.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    } else {
+      resolvedChildren = children!;
+    }
+
+    const stream = createEpicStream(issueContext, mode, resolvedChildren, rootDir);
+
+    nonFatal("setLabel:root:planning", () => setLabel(epicIssue, "root:planning"));
+
+    const lines = [
+      `${mode === "epic" ? "Epic" : "Batch"} stream #${epicIssue} started.`,
+      `Title:    ${stream.issue.title}`,
+      `Branch:   ${stream.epicBranch}`,
+      `Children: ${resolvedChildren.map((n) => `#${n}`).join(", ")}`,
+      `Status:   ${stream.status}`,
+    ];
+    return {
+      content: [{ type: "text", text: lines.join("\n") }],
+    };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tools: board_shared_get / board_shared_append
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "board_shared_get",
+  "Read the shared-context markdown for an epic / batch stream. Returns empty string if no notes yet.",
+  {
+    epicIssue: z.number().int().positive().describe("Issue number of the epic / batch parent stream"),
+  },
+  async ({ epicIssue }) => {
+    const text = getSharedContext(rootDir, epicIssue);
+    return {
+      content: [{ type: "text", text: text.length > 0 ? text : "(no shared context yet)" }],
+    };
+  }
+);
+
+server.tool(
+  "board_shared_append",
+  "Append a timestamped note to an epic / batch stream's shared-context. On overflow (>32KB) fires a blocker notification and returns isError so the caller stops dispatching further children.",
+  {
+    epicIssue: z.number().int().positive().describe("Issue number of the epic / batch parent stream"),
+    note: z.string().min(1).describe("Markdown note. Format readably; this content gets read by every subsequent subagent."),
+  },
+  async ({ epicIssue, note }) => {
+    const result = appendSharedContext(rootDir, epicIssue, note);
+    if (result.overflow) {
+      const notifyCfg = loadNotificationConfig(rootDir);
+      if (notifyCfg !== null) {
+        void sendDiscord(
+          "blocker",
+          {
+            title: `Shared-context overflow on #${epicIssue}`,
+            description: `Shared-context file exceeded the 32KB limit (now ${result.bytes} bytes). Run is paused — review and trim before continuing.`,
+            fields: [{ name: "Epic", value: `#${epicIssue}` }],
+          },
+          notifyCfg
+        );
+      }
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Shared-context overflow on #${epicIssue}: ${result.bytes} bytes (limit ${32 * 1024}). Stop dispatching further children and trim manually.`,
+          },
+        ],
+        isError: true,
+      };
+    }
+    return {
+      content: [
+        { type: "text", text: `Appended to shared-context for #${epicIssue} (${result.bytes} bytes).` },
+      ],
     };
   }
 );

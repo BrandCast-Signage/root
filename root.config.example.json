@@ -7,7 +7,16 @@
       "validation": "auto",
       "pr_creation": "auto"
     },
-    "maxParallel": 3
+    "maxParallel": 3,
+    "githubProject": {
+      "_comment": "Optional. When present, board_start sets the linked Project v2 item's Status to In Progress and applies mirrorLabel. Look up node IDs once via `gh api graphql` (see README → GitHub Project sync).",
+      "projectId": "PVT_xxxxxxxxxxxxxxxxx",
+      "statusFieldId": "PVTSSF_xxxxxxxxxxxxxxxxx",
+      "statusOptions": {
+        "inProgress": "xxxxxxxx"
+      },
+      "mirrorLabel": "status:in-progress"
+    }
   },
   "project": {
     "name": "my-project",
@@ -50,5 +59,13 @@
   "validation": {
     "lintCommand": "npm run lint && npm run type-check",
     "testCommand": "npm test -- <pattern>"
+  },
+  "notifications": {
+    "_comment": "Optional. Discord webhook for autonomous-mode signaling. Webhook URL is read from the ROOT_DISCORD_WEBHOOK_URL environment variable — never store it here. Section absent or `enabled: false` = feature off.",
+    "discord": {
+      "enabled": true,
+      "events": ["blocker", "human_gate", "pr_ready", "epic_complete"],
+      "mention": null
+    }
   }
 }

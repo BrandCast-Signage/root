@@ -12,7 +12,24 @@ export type StreamStatus =
   | "pr-ready"
   | "merged"
   | "blocked"
-  | "decomposed";
+  | "decomposed"
+  | "epic-running"
+  | "epic-blocked"
+  | "epic-complete"
+  | "epic-partial";
+
+/**
+ * What kind of stream this is.
+ *
+ * - `issue` (default) — a normal single-issue stream (current behavior).
+ * - `epic` — parent stream for an epic run; child issues are dispatched as
+ *   subagents and accumulate commits onto a single shared branch.
+ * - `batch` — like `epic` but built from an explicit list of issues
+ *   (typically unrelated tier-2 cleanup) rather than a parent's sub-issues.
+ *
+ * The `epic-*` statuses are only valid when `kind !== "issue"`.
+ */
+export type StreamKind = "issue" | "epic" | "batch";
 
 /** Work complexity tier. Tier 1 requires human delegation; Tier 2 can be fully automated. */
 export type Tier = "tier1" | "tier2";
@@ -84,6 +101,21 @@ export interface StreamState {
   childIssues: number[];
   /** Map of group ID → assignment details. */
   groups: Record<string, GroupAssignment>;
+  /**
+   * What kind of stream this is. Backfilled to `"issue"` for older records.
+   * `"epic"` and `"batch"` unlock the autonomous multi-issue workflows.
+   */
+  kind: StreamKind;
+  /**
+   * For `kind: "epic" | "batch"`, the issue numbers of the child streams
+   * being run under this parent. Empty array for `kind: "issue"`.
+   */
+  epicChildren: number[];
+  /**
+   * For `kind: "epic" | "batch"`, the shared branch all children commit onto.
+   * `null` for `kind: "issue"` (single-issue streams use the regular `branch`).
+   */
+  epicBranch: string | null;
   /** ISO 8601 timestamp of stream creation. */
   created: string;
   /** ISO 8601 timestamp of last update. */
