@@ -9,13 +9,14 @@
     },
     "maxParallel": 3,
     "githubProject": {
-      "_comment": "Optional. When present, board_start sets the linked Project v2 item's Status to In Progress and applies mirrorLabel. Look up node IDs once via `gh api graphql` (see README → GitHub Project sync).",
+      "_comment": "Optional. When present, board_start sets the linked Project v2 item's Status to In Progress and applies mirrorLabel. If startDateFieldId is set, board_start also writes today's date to that Date field on first run (first-write-wins) — enables velocity charts (start_date → close_date). Look up node IDs once via `gh api graphql` (see README → GitHub Project sync).",
       "projectId": "PVT_xxxxxxxxxxxxxxxxx",
       "statusFieldId": "PVTSSF_xxxxxxxxxxxxxxxxx",
       "statusOptions": {
         "inProgress": "xxxxxxxx"
       },
-      "mirrorLabel": "status:in-progress"
+      "mirrorLabel": "status:in-progress",
+      "startDateFieldId": "PVTF_xxxxxxxxxxxxxxxxx"
     }
   },
   "project": {

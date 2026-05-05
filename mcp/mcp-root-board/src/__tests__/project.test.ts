@@ -81,6 +81,24 @@ describe("loadGithubProjectConfig", () => {
     });
   });
 
+  it("parses optional startDateFieldId", () => {
+    fs.writeFileSync(
+      path.join(tmpDir, "root.config.json"),
+      JSON.stringify({
+        board: {
+          githubProject: {
+            projectId: "PVT_kw",
+            statusFieldId: "PVTSSF_kw",
+            statusOptions: { inProgress: "abc123" },
+            startDateFieldId: "PVTF_date",
+          },
+        },
+      }),
+      "utf8"
+    );
+    expect(loadGithubProjectConfig(tmpDir)?.startDateFieldId).toBe("PVTF_date");
+  });
+
   it("treats mirrorLabel as optional", () => {
     fs.writeFileSync(
       path.join(tmpDir, "root.config.json"),
@@ -150,6 +168,64 @@ describe("setProjectStatusInProgress", () => {
       ]),
       { encoding: "utf-8" }
     );
+  });
+
+  it("writes today's date to startDateFieldId when the field is empty", () => {
+    const cfgWithDate = { ...cfg, startDateFieldId: "PVTF_date" };
+    mockExecSync.mockReturnValue(JSON.stringify({ id: "I_node_42" }) as any);
+    mockExecFileSync
+      .mockReturnValueOnce(
+        JSON.stringify({ data: { addProjectV2ItemById: { item: { id: "PVTI_42" } } } }) as any
+      )
+      .mockReturnValueOnce(
+        JSON.stringify({ data: { updateProjectV2ItemFieldValue: { projectV2Item: { id: "PVTI_42" } } } }) as any
+      )
+      .mockReturnValueOnce(
+        JSON.stringify({ data: { node: { fieldValues: { nodes: [] } } } }) as any
+      )
+      .mockReturnValueOnce(
+        JSON.stringify({ data: { updateProjectV2ItemFieldValue: { projectV2Item: { id: "PVTI_42" } } } }) as any
+      );
+
+    setProjectStatusInProgress(42, cfgWithDate);
+
+    const today = new Date().toISOString().slice(0, 10);
+    expect(mockExecFileSync).toHaveBeenNthCalledWith(
+      4,
+      "gh",
+      expect.arrayContaining([
+        "-f", "fieldId=PVTF_date",
+        "-f", `date=${today}`,
+      ]),
+      { encoding: "utf-8" }
+    );
+  });
+
+  it("does not overwrite an existing start date (first-write-wins)", () => {
+    const cfgWithDate = { ...cfg, startDateFieldId: "PVTF_date" };
+    mockExecSync.mockReturnValue(JSON.stringify({ id: "I_node_42" }) as any);
+    mockExecFileSync
+      .mockReturnValueOnce(
+        JSON.stringify({ data: { addProjectV2ItemById: { item: { id: "PVTI_42" } } } }) as any
+      )
+      .mockReturnValueOnce(
+        JSON.stringify({ data: { updateProjectV2ItemFieldValue: { projectV2Item: { id: "PVTI_42" } } } }) as any
+      )
+      .mockReturnValueOnce(
+        JSON.stringify({
+          data: {
+            node: {
+              fieldValues: {
+                nodes: [{ __typename: "ProjectV2ItemFieldDateValue", date: "2026-04-01", field: { id: "PVTF_date" } }],
+              },
+            },
+          },
+        }) as any
+      );
+
+    setProjectStatusInProgress(42, cfgWithDate);
+
+    expect(mockExecFileSync).toHaveBeenCalledTimes(3);
   });
 
   it("propagates errors from the gh CLI so callers can swallow them", () => {
