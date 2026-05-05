@@ -134,6 +134,33 @@ Streams are tracked locally in `.root/board/` and reflected on GitHub issues via
 | **Artifacts** | Persistent plan in `<plansDir>/` | Commit message + PR |
 | **Traceability** | Change Manifest → PRD requirements | GitHub issue/PR linkage |
 
+### Autonomous Multi-Issue Mode (2.4+)
+
+Beyond single-issue autonomy, Root can drive an entire **epic** or a **batch** of unrelated tier-2 issues to a single PR:
+
+```
+/root #<epic-issue> --auto              # Run every linked sub-issue under an epic
+/root #x #y #z --auto --batch           # Run an explicit list of unrelated issues
+```
+
+**Epic mode** resolves children via GitHub's sub-issues link, runs them in declared order on a `feat/epic-<n>-<slug>` branch, and assembles a single PR with `Closes #x` for each child.
+
+**Batch mode** takes an explicit issue list, requires every member to classify as tier-2, runs them on a `chore/batch-<n>-<slug>` branch, and produces one PR. Any tier-1 sneak-in is a hard stop.
+
+Both modes share a per-run **shared-context** file at `.root/streams/<parent>/shared-context.md` that subagents append to as they work — this is what protects the run against the orchestrator's auto-compaction.
+
+#### Readiness gate
+
+Before any autonomous run starts, every involved issue is graded by the `issue-readiness-grader` agent against a strict rubric (goal stated, scope bounded, solvability, touchpoints clear, no blocking deps, tier-honest). Any `needs-clarification` verdict triggers an **interactive interview**: Root asks the human concrete questions, applies the answers to the issue body via `gh issue edit`, and re-grades. There is no `--force` to bypass this — closing the readiness gap IS the work, not an obstacle to skip. The interview caps at 3 rounds; round 4 is a hard stop.
+
+#### Partial PRs
+
+If a child fails mid-run, completed children stay on the branch and ship in a partial PR (kept draft). The PR body marks the partial completion clearly. The user can re-run the unfinished children later with a fresh `/root #<remaining> --auto` invocation.
+
+#### Notifications
+
+Configure a Discord webhook to get pinged when the autonomous run hits a human gate, blocker, or completion (see *Notifications* below). Without a webhook configured, autonomous mode still works — you just have to watch the shell.
+
 ### Documentation Onboarding
 
 For projects with incomplete or missing documentation:
@@ -297,6 +324,46 @@ The `board.gates` section controls which transitions require human approval:
 | `pr_creation` | `auto` | Whether PR creation is automatic |
 
 Set any gate to `"human"` to always pause, `"auto"` to always advance, or use `{ "tier1": "human", "tier2": "auto" }` for tier-specific behavior.
+
+### Notifications
+
+When `notifications.discord` is configured AND the `ROOT_DISCORD_WEBHOOK_URL` environment variable is set, Root posts color-coded Discord embeds for autonomous-mode signaling.
+
+```json
+"notifications": {
+  "discord": {
+    "enabled": true,
+    "events": ["blocker", "human_gate", "pr_ready", "epic_complete"],
+    "mention": null
+  }
+}
+```
+
+**Webhook URL is never stored in any committed file.** Set it via environment:
+
+```bash
+export ROOT_DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
+```
+
+The four events:
+
+| Event | Color | When |
+|---|---|---|
+| `blocker` | red | A run is parked on a hard failure (failed readiness after 3 rounds, classifier disagreement, repeated test failure, shared-context overflow) |
+| `human_gate` | amber | Waiting for explicit human approval (Tier 1 plan, etc.) |
+| `pr_ready` | blue | A PR has been opened/updated; review needed |
+| `epic_complete` | green | Every child of an epic / batch run completed; PR is ready to flip to non-draft |
+
+Set `mention` to a role/user mention string (`<@&role-id>` or `<@user-id>`) to ping on `blocker` events. Other events never @-mention regardless of config.
+
+If the section is absent, `enabled: false`, or the env var is unset, notifications are silently off — Root works as if the feature didn't exist.
+
+**Verify the webhook works:**
+```bash
+curl -X POST -H 'Content-Type: application/json' \
+  -d '{"content":"root webhook smoke test"}' \
+  "$ROOT_DISCORD_WEBHOOK_URL"
+```
 
 ### GitHub Project sync
 
