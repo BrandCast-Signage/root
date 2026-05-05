@@ -24,7 +24,7 @@ const rootDir = process.env["ROOT_DIR"] ?? process.cwd();
 
 const server = new McpServer({
   name: "root-board",
-  version: "0.3.0",
+  version: "0.4.0",
 });
 
 // ---------------------------------------------------------------------------
