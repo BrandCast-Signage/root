@@ -6,6 +6,7 @@ import { classifyTier } from "./classify.js";
 import { evaluateGate, getNextTransition, loadGateConfig } from "./gates.js";
 import { analyzeGraph, extractMermaidBlock } from "./graph.js";
 import { addComment, getIssue, getIssueLabels, removeLabel, setLabel } from "./github.js";
+import { loadGithubProjectConfig, setProjectStatusInProgress } from "./project.js";
 import { IssueContext } from "./types.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
 
@@ -185,6 +186,22 @@ server.tool(
       setLabel(issue, "root:planning");
     } catch {
       // gh not authenticated or label doesn't exist — ignore.
+    }
+
+    // Sync the linked GitHub Project v2 item to "In Progress" — feature is
+    // gated on `board.githubProject` being present in `root.config.json`.
+    // Failures (auth, missing IDs, GraphQL errors) are non-fatal: the
+    // stream is real, the project mirror is a nice-to-have.
+    const projectCfg = loadGithubProjectConfig(rootDir);
+    if (projectCfg !== null) {
+      try {
+        setProjectStatusInProgress(issue, projectCfg);
+        if (projectCfg.mirrorLabel !== undefined) {
+          try { setLabel(issue, projectCfg.mirrorLabel); } catch { /* ignore */ }
+        }
+      } catch {
+        // GraphQL call failed — surface in stderr by Node default but don't fail board_start.
+      }
     }
 
     const lines = [

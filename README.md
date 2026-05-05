@@ -298,6 +298,43 @@ The `board.gates` section controls which transitions require human approval:
 
 Set any gate to `"human"` to always pause, `"auto"` to always advance, or use `{ "tier1": "human", "tier2": "auto" }` for tier-specific behavior.
 
+### GitHub Project sync
+
+When `board.githubProject` is set, `board_start` flips the linked Project v2 item's Status field to "In Progress" and applies the configured mirror label on the issue. Other Project transitions (auto-add to Backlog, PR-linked → Review, item-closed → Done) are handled by Project v2's native workflows; only Backlog/Ready → In Progress requires Root to write.
+
+```json
+"board": {
+  "githubProject": {
+    "projectId": "PVT_…",
+    "statusFieldId": "PVTSSF_…",
+    "statusOptions": { "inProgress": "<option-id>" },
+    "mirrorLabel": "status:in-progress"
+  }
+}
+```
+
+If the section is absent, the feature is off — `board_start` works exactly as before. Failures (gh not authenticated, stale field IDs, GraphQL errors) are non-fatal: the work stream is real, the Project mirror is a nice-to-have.
+
+**Looking up the node IDs** — run once per project, paste into config:
+
+```bash
+# Project ID + status field ID + option IDs
+gh api graphql -f query='
+  query($org:String!,$num:Int!){
+    organization(login:$org){
+      projectV2(number:$num){
+        id
+        field(name:"Status"){
+          ... on ProjectV2SingleSelectField {
+            id
+            options { id name }
+          }
+        }
+      }
+    }
+  }' -f org=<org> -F num=<project-number>
+```
+
 ## Components
 
 | Component | Type | Purpose |

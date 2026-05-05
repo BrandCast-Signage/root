@@ -7,7 +7,16 @@
       "validation": "auto",
       "pr_creation": "auto"
     },
-    "maxParallel": 3
+    "maxParallel": 3,
+    "githubProject": {
+      "_comment": "Optional. When present, board_start sets the linked Project v2 item's Status to In Progress and applies mirrorLabel. Look up node IDs once via `gh api graphql` (see README → GitHub Project sync).",
+      "projectId": "PVT_xxxxxxxxxxxxxxxxx",
+      "statusFieldId": "PVTSSF_xxxxxxxxxxxxxxxxx",
+      "statusOptions": {
+        "inProgress": "xxxxxxxx"
+      },
+      "mirrorLabel": "status:in-progress"
+    }
   },
   "project": {
     "name": "my-project",
