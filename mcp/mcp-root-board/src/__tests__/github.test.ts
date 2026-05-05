@@ -11,6 +11,7 @@ import {
   createPR,
   getIssue,
   getIssueLabels,
+  getSubIssues,
   removeLabel,
   setLabel,
 } from "../github.js";
@@ -258,5 +259,65 @@ describe("createPR", () => {
     expect(() => createPR("issue-42", "main", "Fix", "body")).toThrow(
       "pull request already exists"
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getSubIssues
+// ---------------------------------------------------------------------------
+
+describe("getSubIssues", () => {
+  it("returns child issue numbers in the order GitHub returns them", () => {
+    mockExecSync.mockReturnValue(
+      JSON.stringify({ owner: { login: "acme" }, name: "repo" }) as any
+    );
+    mockExecFileSync.mockReturnValue(
+      JSON.stringify({
+        data: {
+          repository: {
+            issue: {
+              subIssues: { nodes: [{ number: 2 }, { number: 3 }, { number: 4 }] },
+            },
+          },
+        },
+      }) as any
+    );
+
+    expect(getSubIssues(9)).toEqual([2, 3, 4]);
+
+    expect(mockExecFileSync).toHaveBeenCalledWith(
+      "gh",
+      expect.arrayContaining([
+        "api", "graphql",
+        "-f", "owner=acme",
+        "-f", "repo=repo",
+        "-F", "num=9",
+      ]),
+      { encoding: "utf-8" }
+    );
+  });
+
+  it("returns an empty array when the issue has no sub-issues", () => {
+    mockExecSync.mockReturnValue(
+      JSON.stringify({ owner: { login: "acme" }, name: "repo" }) as any
+    );
+    mockExecFileSync.mockReturnValue(
+      JSON.stringify({
+        data: { repository: { issue: { subIssues: { nodes: [] } } } },
+      }) as any
+    );
+
+    expect(getSubIssues(9)).toEqual([]);
+  });
+
+  it("propagates errors from gh so callers can fail fast (epic mode is non-recoverable)", () => {
+    mockExecSync.mockReturnValue(
+      JSON.stringify({ owner: { login: "acme" }, name: "repo" }) as any
+    );
+    mockExecFileSync.mockImplementation(() => {
+      throw new Error("not authenticated");
+    });
+
+    expect(() => getSubIssues(9)).toThrow("not authenticated");
   });
 });

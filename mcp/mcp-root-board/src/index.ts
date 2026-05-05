@@ -1,11 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { createStream, deleteStream, listStreams, readStream, updateStream } from "./board.js";
+import { createEpicStream, createStream, deleteStream, listStreams, readStream, updateStream } from "./board.js";
 import { classifyTier } from "./classify.js";
 import { evaluateGate, getNextTransition, loadGateConfig } from "./gates.js";
 import { analyzeGraph, extractMermaidBlock } from "./graph.js";
-import { addComment, getIssue, getIssueLabels, removeLabel, setLabel } from "./github.js";
+import { addComment, getIssue, getIssueLabels, getSubIssues, removeLabel, setLabel } from "./github.js";
 import { loadNotificationConfig, sendDiscord } from "./notify.js";
 import { loadGithubProjectConfig, setProjectStatusInProgress } from "./project.js";
 import { appendSharedContext, getSharedContext } from "./sharedContext.js";
@@ -243,6 +243,71 @@ server.tool(
       `Tier:      ${updated.tier} (${classification.source}: ${classification.reason})`,
     ];
 
+    return {
+      content: [{ type: "text", text: lines.join("\n") }],
+    };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool: board_epic_start
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "board_epic_start",
+  "Start a parent stream for an autonomous multi-issue run. For mode='epic', children are fetched from the parent's GitHub sub-issues. For mode='batch', children must be supplied explicitly. Does NOT execute children — that's the orchestrator's job.",
+  {
+    epicIssue: z.number().int().positive().describe("GitHub issue number of the epic / batch parent"),
+    mode: z.enum(["epic", "batch"]).describe("'epic' resolves children via the GitHub sub-issues connection; 'batch' uses the explicit `children` array"),
+    children: z.array(z.number().int().positive()).optional().describe("Required for mode='batch'; ignored for mode='epic'"),
+  },
+  async ({ epicIssue, mode, children }) => {
+    if (mode === "batch" && (children === undefined || children.length === 0)) {
+      return {
+        content: [
+          { type: "text", text: "board_epic_start: mode='batch' requires a non-empty `children` array." },
+        ],
+        isError: true,
+      };
+    }
+
+    const issueData = getIssue(epicIssue);
+    const issueContext: IssueContext = {
+      number: issueData.number,
+      title: issueData.title,
+      labels: issueData.labels,
+      state: issueData.state,
+    };
+
+    let resolvedChildren: number[];
+    if (mode === "epic") {
+      resolvedChildren = getSubIssues(epicIssue);
+      if (resolvedChildren.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `board_epic_start: #${epicIssue} has no linked sub-issues. Either link children first, or use mode='batch' with an explicit list.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    } else {
+      resolvedChildren = children!;
+    }
+
+    const stream = createEpicStream(issueContext, mode, resolvedChildren, rootDir);
+
+    nonFatal("setLabel:root:planning", () => setLabel(epicIssue, "root:planning"));
+
+    const lines = [
+      `${mode === "epic" ? "Epic" : "Batch"} stream #${epicIssue} started.`,
+      `Title:    ${stream.issue.title}`,
+      `Branch:   ${stream.epicBranch}`,
+      `Children: ${resolvedChildren.map((n) => `#${n}`).join(", ")}`,
+      `Status:   ${stream.status}`,
+    ];
     return {
       content: [{ type: "text", text: lines.join("\n") }],
     };

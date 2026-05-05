@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
+  createEpicStream,
   createStream,
   deleteStream,
   getBoardDir,
@@ -319,5 +320,60 @@ describe("migrate integration via readStream", () => {
     expect(result).toBe(current); // same reference
     expect(result.status).toBe("implementing");
     expect(result.tierSource).toBe("classifier");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createEpicStream
+// ---------------------------------------------------------------------------
+
+describe("createEpicStream", () => {
+  const EPIC_ISSUE: IssueContext = {
+    number: 100,
+    title: "Autonomous multi-issue execution",
+    labels: ["epic", "root-3.0"],
+    state: "open",
+  };
+
+  it("creates an epic stream with kind, children, and a derived branch name", () => {
+    const stream = createEpicStream(EPIC_ISSUE, "epic", [101, 102, 103], tmpDir);
+
+    expect(stream.kind).toBe("epic");
+    expect(stream.epicChildren).toEqual([101, 102, 103]);
+    expect(stream.childIssues).toEqual([101, 102, 103]);
+    expect(stream.epicBranch).toMatch(/^feat\/epic-100-autonomous-multi-issue-execution/);
+    expect(stream.branch).toBe(stream.epicBranch);
+    expect(stream.status).toBe("epic-running");
+    expect(stream.autoApprove).toBe(true);
+  });
+
+  it("uses chore/batch- prefix for kind='batch'", () => {
+    const stream = createEpicStream(EPIC_ISSUE, "batch", [201, 202], tmpDir);
+
+    expect(stream.kind).toBe("batch");
+    expect(stream.epicBranch).toMatch(/^chore\/batch-100-/);
+  });
+
+  it("forces parent tier to tier2 with a clear reason", () => {
+    const stream = createEpicStream(EPIC_ISSUE, "epic", [101], tmpDir);
+
+    expect(stream.tier).toBe("tier2");
+    expect(stream.tierReason).toContain("per child");
+  });
+
+  it("persists the stream so readStream can load it", () => {
+    createEpicStream(EPIC_ISSUE, "epic", [101, 102], tmpDir);
+    const reloaded = readStream(tmpDir, 100);
+
+    expect(reloaded).not.toBeNull();
+    expect(reloaded!.kind).toBe("epic");
+    expect(reloaded!.epicChildren).toEqual([101, 102]);
+  });
+
+  it("handles titles with no slug-able characters by falling back to the prefix only", () => {
+    const odd: IssueContext = { number: 100, title: "!!!", labels: [], state: "open" };
+    const stream = createEpicStream(odd, "epic", [1], tmpDir);
+
+    expect(stream.epicBranch).toBe("feat/epic-100");
   });
 });
