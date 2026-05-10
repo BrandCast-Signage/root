@@ -65,7 +65,8 @@ Stop.
 **Phase-aware dispatch** (we now have an issue number):
 
 1. Call `board_status` with the issue number.
-2. Route based on the stream's status:
+2. If a stream record exists (any status), call `board_reconcile` with the issue number **before routing**. If `board_reconcile` returns `{ "reconciled": true }`, the stream was in a terminal GitHub state (PR merged or issue closed out-of-band). Output: "Stream #<issue> reconciled — <reason>. Record removed." Stop. Do not proceed to any planning or implementation steps.
+3. Route based on the stream's status:
 
 | Stream status | Action |
 |---------------|--------|
@@ -293,7 +294,9 @@ Read `root.config.json` to get `project.plansDir` and `project.prdsDir`.
    - Verification commands from `root.config.json` → `validation`
    - No persistent artifact needed — the commit message and PR description serve as source of record
 
-3. **Update session state**: Call `board_run` with the issue number. For Tier 2 the `plan_approval` gate defaults to `auto`, so the stream will advance automatically.
+3. **Record the plan path**: After `EnterPlanMode` returns, the harness provides the plan file path (e.g. `.claude/plans/<slug>.md`). Call `board_set_plan_path` with the issue number and that path to persist it on the stream record. This ensures `board_status` surfaces the plan location and gates have a concrete `planPath` to evaluate — without it the stream stays stuck at `planning` indefinitely.
+
+4. **Update session state**: Call `board_run` with the issue number. For Tier 2 the `plan_approval` gate defaults to `auto`, so the stream will advance automatically.
 
 The plan is ready when the user approves it via plan mode. GitHub issue/PR linkage provides traceability.
 

@@ -604,6 +604,84 @@ server.tool("board_delete", "Delete a work stream and its worktree. Use when aba
     };
 });
 // ---------------------------------------------------------------------------
+// Tool: board_set_plan_path
+// ---------------------------------------------------------------------------
+server.tool("board_set_plan_path", "Record the ephemeral plan file path on a stream record. Called after Tier 2 plan mode exits so board_status can surface the plan location and gates have a concrete planPath to evaluate.", {
+    issue: zod_1.z.number().int().positive().describe("GitHub issue number"),
+    planPath: zod_1.z.string().min(1).describe("Absolute or relative path to the plan file (e.g. .claude/plans/<slug>.md)"),
+}, async ({ issue, planPath }) => {
+    const stream = (0, board_js_1.readStream)(rootDir, issue);
+    if (stream === null) {
+        return {
+            content: [{ type: "text", text: `No stream found for #${issue}` }],
+            isError: true,
+        };
+    }
+    (0, board_js_1.updateStream)(rootDir, issue, { planPath });
+    return {
+        content: [
+            { type: "text", text: `Stream #${issue}: planPath set to "${planPath}".` },
+        ],
+    };
+});
+// ---------------------------------------------------------------------------
+// Tool: board_reconcile
+// ---------------------------------------------------------------------------
+server.tool("board_reconcile", "Check whether a stream's linked issue is closed or its PR is merged out-of-band. If the stream is in a terminal GitHub state, auto-delete the board record and report reconciliation. Returns a reconciled/active status so the caller can decide how to proceed.", {
+    issue: zod_1.z.number().int().positive().describe("GitHub issue number"),
+}, async ({ issue }) => {
+    const stream = (0, board_js_1.readStream)(rootDir, issue);
+    if (stream === null) {
+        return {
+            content: [
+                {
+                    type: "text",
+                    text: JSON.stringify({ reconciled: false, reason: `No stream found for #${issue}` }, null, 2),
+                },
+            ],
+        };
+    }
+    const { issueClosed, prMerged } = (0, github_js_1.getTerminalGitHubState)(issue, stream.branch);
+    if (issueClosed || prMerged) {
+        // Remove root: labels from the issue non-fatally.
+        const rootLabels = ["root:planning", "root:plan-ready", "root:approved", "root:implementing", "root:validating", "root:pr-ready"];
+        for (const label of rootLabels) {
+            nonFatal(`reconcile:removeLabel:${label}`, () => (0, github_js_1.removeLabel)(issue, label));
+        }
+        // Delete the stream record.
+        (0, board_js_1.deleteStream)(rootDir, issue);
+        const reason = issueClosed && prMerged
+            ? "issue closed and PR merged"
+            : issueClosed
+                ? "issue closed"
+                : "PR merged";
+        return {
+            content: [
+                {
+                    type: "text",
+                    text: JSON.stringify({
+                        reconciled: true,
+                        reason,
+                        message: `Stream #${issue} reconciled — ${reason} out-of-band. Record removed.`,
+                    }, null, 2),
+                },
+            ],
+        };
+    }
+    return {
+        content: [
+            {
+                type: "text",
+                text: JSON.stringify({
+                    reconciled: false,
+                    reason: "issue open and no merged PR found",
+                    currentStatus: stream.status,
+                }, null, 2),
+            },
+        ],
+    };
+});
+// ---------------------------------------------------------------------------
 // Tool: board_analyze_plan
 // ---------------------------------------------------------------------------
 server.tool("board_analyze_plan", "Analyze an Implementation Plan's dependency graph for independent concerns. Returns subgraph analysis indicating whether decomposition is recommended.", {

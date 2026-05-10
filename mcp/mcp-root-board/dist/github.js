@@ -7,6 +7,7 @@ exports.setLabel = setLabel;
 exports.removeLabel = removeLabel;
 exports.addComment = addComment;
 exports.getSubIssues = getSubIssues;
+exports.getTerminalGitHubState = getTerminalGitHubState;
 exports.createPR = createPR;
 const node_child_process_1 = require("node:child_process");
 /**
@@ -129,6 +130,40 @@ function getSubIssues(issue) {
     ], { encoding: "utf-8" });
     const parsed = JSON.parse(out);
     return parsed.data.repository.issue.subIssues.nodes.map((n) => n.number);
+}
+/**
+ * Check the terminal GitHub state for a stream's issue and branch.
+ *
+ * Returns whether the issue is closed and whether the linked branch's PR is
+ * merged. Both checks together indicate that a stream has completed out-of-band
+ * (e.g. the user merged manually) and the board record can be auto-deleted.
+ *
+ * @param issue - GitHub issue number.
+ * @param branch - Branch name to search for a merged PR.
+ * @returns Object with `issueClosed` and `prMerged` flags.
+ */
+function getTerminalGitHubState(issue, branch) {
+    let issueClosed = false;
+    let prMerged = false;
+    try {
+        const issueOut = (0, node_child_process_1.execSync)(`gh issue view ${issue} --json state,closed`, { encoding: "utf-8" });
+        const issueData = JSON.parse(issueOut);
+        issueClosed = issueData.closed === true || issueData.state === "CLOSED";
+    }
+    catch {
+        // gh unavailable or issue not found — treat as not closed.
+    }
+    if (branch !== null) {
+        try {
+            const prOut = (0, node_child_process_1.execSync)(`gh pr list --head "${branch}" --state merged --json number,mergedAt`, { encoding: "utf-8" });
+            const prs = JSON.parse(prOut);
+            prMerged = prs.length > 0;
+        }
+        catch {
+            // gh unavailable or no PR found — treat as not merged.
+        }
+    }
+    return { issueClosed, prMerged };
 }
 /**
  * Create a pull request via the `gh` CLI.
