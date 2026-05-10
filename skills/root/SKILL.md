@@ -65,7 +65,8 @@ Stop.
 **Phase-aware dispatch** (we now have an issue number):
 
 1. Call `board_status` with the issue number.
-2. Route based on the stream's status:
+2. If a stream record exists (any status), call `board_reconcile` with the issue number **before routing**. If `board_reconcile` returns `{ "reconciled": true }`, the stream was in a terminal GitHub state (PR merged or issue closed out-of-band). Output: "Stream #<issue> reconciled — <reason>. Record removed." Stop. Do not proceed to any planning or implementation steps.
+3. Route based on the stream's status:
 
 | Stream status | Action |
 |---------------|--------|
@@ -86,6 +87,7 @@ Only the "no stream" and "planning" branches fall through to Steps 1-8 below. Al
 | No stream exists (fresh creation) | Pass `autoApprove: true` to `board_start` in Step 6. All gates (including Tier 1 `plan_approval`) auto-advance for this stream. |
 | Stream exists, status `plan-ready` | Treat as equivalent to `approve` — call `board_approve` with the issue, then fall through to phase-aware dispatch. |
 | Stream exists, any other status | `--auto` is a no-op and a warning: "Stream #<issue> already exists with `autoApprove: <value>`. `--auto` only takes effect at stream creation. To green-light a specific gate, use `/root approve #<issue>`." Continue with phase-aware dispatch regardless. |
+| Orchestrator behavior throughout the run | Under `--auto`, the orchestrator MUST NOT call `AskUserQuestion` and MUST NOT park the run for human approval at any step Root controls (`plan_approval`, draft-PR review, post-CI review, run-completion confirmation). The only stops permitted are: (a) readiness-gate interview where context cannot resolve a concern, (b) genuinely irrecoverable failure, (c) external gates Root does not control (branch protection, required reviews, red CI). `--auto` is permission to make defensible defaults and ship. |
 
 The MCP enforces this honestly: `board_run` at `mcp/mcp-root-board/src/index.ts:337` skips gate evaluation entirely when `stream.autoApprove === true`, including Tier 1 `plan_approval`. There is no "`--auto` does not override plan_approval" rule — if you see a message claiming that, the stream's `autoApprove` is `false`.
 
@@ -293,7 +295,9 @@ Read `root.config.json` to get `project.plansDir` and `project.prdsDir`.
    - Verification commands from `root.config.json` → `validation`
    - No persistent artifact needed — the commit message and PR description serve as source of record
 
-3. **Update session state**: Call `board_run` with the issue number. For Tier 2 the `plan_approval` gate defaults to `auto`, so the stream will advance automatically.
+3. **Record the plan path**: After `EnterPlanMode` returns, the harness provides the plan file path (e.g. `.claude/plans/<slug>.md`). Call `board_set_plan_path` with the issue number and that path to persist it on the stream record. This ensures `board_status` surfaces the plan location and gates have a concrete `planPath` to evaluate — without it the stream stays stuck at `planning` indefinitely.
+
+4. **Update session state**: Call `board_run` with the issue number. For Tier 2 the `plan_approval` gate defaults to `auto`, so the stream will advance automatically.
 
 The plan is ready when the user approves it via plan mode. GitHub issue/PR linkage provides traceability.
 
@@ -382,7 +386,7 @@ For each child in declared order:
 
 5. **Append summary to shared-context.** One concise entry per child: issue number, commit SHAs, files touched, deviations, target metrics. This is what protects against auto-compact — the orchestrator may forget what the child did, but the file remembers.
 
-6. **Update / open PR.** On first completed child: open the PR as draft (`gh pr create --draft --base main --head <epicBranch>`). On every subsequent child: `gh pr edit` to refresh the body, adding the new `Closes #<n>` line and the new check entry. PR title:
+6. **Update / open PR.** On first completed child: open the PR — as **ready-for-review** when `--auto` is set (`gh pr create --base main --head <epicBranch>`), or as **draft** otherwise (`gh pr create --draft --base main --head <epicBranch>`). On every subsequent child: `gh pr edit` to refresh the body, adding the new `Closes #<n>` line and the new check entry. PR title:
    - Epic: `<epic-title> (epic #<epic-num>)`
    - Batch: `chore: batch fixes (#x, #y, #z)`
    PR body sketch:
@@ -408,6 +412,19 @@ When all children complete successfully:
 1. Append final note to shared-context summarizing the run.
 2. Update parent stream status to `epic-complete`.
 3. Fire `sendDiscord('epic_complete', ...)` with the PR URL.
+
+**If `--auto` is set** (autonomous completion path):
+
+4. Squash-merge the PR: `gh pr merge <pr-num> --squash --delete-branch`.
+5. Update parent stream status to `merged`.
+6. Clean up the worktree: `git worktree remove <worktree-path> --force`.
+7. Delete the parent stream from the board: `board_delete({ issue: <epic-or-batch-num> })`.
+8. Print a concise summary: which children landed (issue numbers + titles), the merge SHA, and a one-line note on what shipped.
+
+**If CI is red, branch protection blocks the merge, or a merge conflict exists** (regardless of `--auto`): park at `pr-ready`, fire `sendDiscord('blocker', ...)` describing the external gate, and surface the blocker to the user. `--auto` does not bypass branch-protection rules or required reviews — it removes only the human gates Root itself imposes.
+
+**If `--auto` is NOT set** (non-autonomous path):
+
 4. PR stays draft until the user explicitly flips it to ready (deliberate — gives the user a final chance to scan the assembled diff before review starts). Print: "Epic #<n> complete. PR #<pr-num> is ready for review (currently draft). Flip to ready with `gh pr ready <pr-num>` when satisfied."
 
 ### Auto-compact resilience

@@ -12,6 +12,7 @@ import {
   getIssue,
   getIssueLabels,
   getSubIssues,
+  getTerminalGitHubState,
   removeLabel,
   setLabel,
 } from "../github.js";
@@ -319,5 +320,89 @@ describe("getSubIssues", () => {
     });
 
     expect(() => getSubIssues(9)).toThrow("not authenticated");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getTerminalGitHubState
+// ---------------------------------------------------------------------------
+
+describe("getTerminalGitHubState", () => {
+  it("returns issueClosed=true and prMerged=true when both are true", () => {
+    mockExecSync
+      .mockReturnValueOnce(JSON.stringify({ state: "CLOSED", closed: true }) as any)
+      .mockReturnValueOnce(JSON.stringify([{ number: 99, mergedAt: "2026-05-01T00:00:00Z" }]) as any);
+
+    const result = getTerminalGitHubState(42, "feat/42-my-feature");
+
+    expect(result.issueClosed).toBe(true);
+    expect(result.prMerged).toBe(true);
+  });
+
+  it("returns issueClosed=true and prMerged=false when issue is closed but no merged PR", () => {
+    mockExecSync
+      .mockReturnValueOnce(JSON.stringify({ state: "CLOSED", closed: true }) as any)
+      .mockReturnValueOnce(JSON.stringify([]) as any);
+
+    const result = getTerminalGitHubState(42, "feat/42-my-feature");
+
+    expect(result.issueClosed).toBe(true);
+    expect(result.prMerged).toBe(false);
+  });
+
+  it("returns issueClosed=false and prMerged=true when PR is merged but issue is still open", () => {
+    mockExecSync
+      .mockReturnValueOnce(JSON.stringify({ state: "OPEN", closed: false }) as any)
+      .mockReturnValueOnce(JSON.stringify([{ number: 99, mergedAt: "2026-05-01T00:00:00Z" }]) as any);
+
+    const result = getTerminalGitHubState(42, "feat/42-my-feature");
+
+    expect(result.issueClosed).toBe(false);
+    expect(result.prMerged).toBe(true);
+  });
+
+  it("returns all false when issue is open and no merged PR", () => {
+    mockExecSync
+      .mockReturnValueOnce(JSON.stringify({ state: "OPEN", closed: false }) as any)
+      .mockReturnValueOnce(JSON.stringify([]) as any);
+
+    const result = getTerminalGitHubState(42, "feat/42-my-feature");
+
+    expect(result.issueClosed).toBe(false);
+    expect(result.prMerged).toBe(false);
+  });
+
+  it("skips PR check when branch is null and still returns issue state", () => {
+    mockExecSync
+      .mockReturnValueOnce(JSON.stringify({ state: "CLOSED", closed: true }) as any);
+
+    const result = getTerminalGitHubState(42, null);
+
+    expect(result.issueClosed).toBe(true);
+    expect(result.prMerged).toBe(false);
+    // Should only have called execSync once (for issue, not PR)
+    expect(mockExecSync).toHaveBeenCalledTimes(1);
+  });
+
+  it("gracefully handles gh failure on issue check — returns false rather than throwing", () => {
+    mockExecSync
+      .mockImplementationOnce(() => { throw new Error("gh: not authenticated"); })
+      .mockReturnValueOnce(JSON.stringify([]) as any);
+
+    const result = getTerminalGitHubState(42, "feat/42-branch");
+
+    expect(result.issueClosed).toBe(false);
+    expect(result.prMerged).toBe(false);
+  });
+
+  it("gracefully handles gh failure on PR check — returns false for prMerged rather than throwing", () => {
+    mockExecSync
+      .mockReturnValueOnce(JSON.stringify({ state: "OPEN", closed: false }) as any)
+      .mockImplementationOnce(() => { throw new Error("gh: request failed"); });
+
+    const result = getTerminalGitHubState(42, "feat/42-branch");
+
+    expect(result.issueClosed).toBe(false);
+    expect(result.prMerged).toBe(false);
   });
 });

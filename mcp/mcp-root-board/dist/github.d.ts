@@ -69,6 +69,21 @@ export declare function addComment(issue: number, body: string): void;
  */
 export declare function getSubIssues(issue: number): number[];
 /**
+ * Check the terminal GitHub state for a stream's issue and branch.
+ *
+ * Returns whether the issue is closed and whether the linked branch's PR is
+ * merged. Both checks together indicate that a stream has completed out-of-band
+ * (e.g. the user merged manually) and the board record can be auto-deleted.
+ *
+ * @param issue - GitHub issue number.
+ * @param branch - Branch name to search for a merged PR.
+ * @returns Object with `issueClosed` and `prMerged` flags.
+ */
+export declare function getTerminalGitHubState(issue: number, branch: string | null): {
+    issueClosed: boolean;
+    prMerged: boolean;
+};
+/**
  * Create a pull request via the `gh` CLI.
  *
  * @param head - Head branch name.

@@ -5,7 +5,7 @@ import { createEpicStream, createStream, deleteStream, listStreams, readStream, 
 import { classifyTier } from "./classify.js";
 import { evaluateGate, getNextTransition, loadGateConfig } from "./gates.js";
 import { analyzeGraph, extractMermaidBlock } from "./graph.js";
-import { addComment, getIssue, getIssueLabels, getSubIssues, removeLabel, setLabel } from "./github.js";
+import { addComment, getIssue, getIssueLabels, getSubIssues, getTerminalGitHubState, removeLabel, setLabel } from "./github.js";
 import { loadNotificationConfig, sendDiscord } from "./notify.js";
 import { loadGithubProjectConfig, setProjectStatusInProgress } from "./project.js";
 import { appendSharedContext, getSharedContext } from "./sharedContext.js";
@@ -746,6 +746,116 @@ server.tool(
 
     return {
       content: [{ type: "text", text: msg }],
+    };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool: board_set_plan_path
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "board_set_plan_path",
+  "Record the ephemeral plan file path on a stream record. Called after Tier 2 plan mode exits so board_status can surface the plan location and gates have a concrete planPath to evaluate.",
+  {
+    issue: z.number().int().positive().describe("GitHub issue number"),
+    planPath: z.string().min(1).describe("Absolute or relative path to the plan file (e.g. .claude/plans/<slug>.md)"),
+  },
+  async ({ issue, planPath }) => {
+    const stream = readStream(rootDir, issue);
+
+    if (stream === null) {
+      return {
+        content: [{ type: "text", text: `No stream found for #${issue}` }],
+        isError: true,
+      };
+    }
+
+    updateStream(rootDir, issue, { planPath });
+
+    return {
+      content: [
+        { type: "text", text: `Stream #${issue}: planPath set to "${planPath}".` },
+      ],
+    };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool: board_reconcile
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "board_reconcile",
+  "Check whether a stream's linked issue is closed or its PR is merged out-of-band. If the stream is in a terminal GitHub state, auto-delete the board record and report reconciliation. Returns a reconciled/active status so the caller can decide how to proceed.",
+  {
+    issue: z.number().int().positive().describe("GitHub issue number"),
+  },
+  async ({ issue }) => {
+    const stream = readStream(rootDir, issue);
+
+    if (stream === null) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ reconciled: false, reason: `No stream found for #${issue}` }, null, 2),
+          },
+        ],
+      };
+    }
+
+    const { issueClosed, prMerged } = getTerminalGitHubState(issue, stream.branch);
+
+    if (issueClosed || prMerged) {
+      // Remove root: labels from the issue non-fatally.
+      const rootLabels = ["root:planning", "root:plan-ready", "root:approved", "root:implementing", "root:validating", "root:pr-ready"];
+      for (const label of rootLabels) {
+        nonFatal(`reconcile:removeLabel:${label}`, () => removeLabel(issue, label));
+      }
+
+      // Delete the stream record.
+      deleteStream(rootDir, issue);
+
+      const reason = issueClosed && prMerged
+        ? "issue closed and PR merged"
+        : issueClosed
+          ? "issue closed"
+          : "PR merged";
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                reconciled: true,
+                reason,
+                message: `Stream #${issue} reconciled — ${reason} out-of-band. Record removed.`,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              reconciled: false,
+              reason: "issue open and no merged PR found",
+              currentStatus: stream.status,
+            },
+            null,
+            2
+          ),
+        },
+      ],
     };
   }
 );
