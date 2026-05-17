@@ -21,15 +21,23 @@ export declare function installDependencies(worktreePath: string): void;
  * Create a git worktree for the given issue and branch.
  *
  * The worktree is placed as a sibling of `projectDir`, named
- * `<projectDirBasename>-<issue>`.
+ * `<projectDirBasename>-<issue>` or `<projectDirBasename>-<issue>-<suffix>`
+ * when a non-empty suffix is provided.
  *
- * @param projectDir - Absolute path to the project (main worktree) directory.
+ * `projectDir` is resolved to an absolute path before basename extraction,
+ * so passing `"."` (as used when `ROOT_DIR="."`) produces the correct name
+ * rather than `.-<issue>`.
+ *
+ * @param projectDir - Path to the project (main worktree) directory. May be relative.
  * @param issue - GitHub issue number used to derive the worktree directory name.
  * @param branch - New branch name to create in the worktree.
+ * @param suffix - Optional disambiguator appended to the directory name as `-<suffix>`.
+ *   Useful when multiple parallel worktrees are created for the same issue (e.g. group IDs
+ *   "A", "B"). Empty or whitespace-only values are treated as absent.
  * @returns Absolute path to the newly created worktree directory.
  * @throws {Error} If the `git worktree add` command fails.
  */
-export declare function createWorktree(projectDir: string, issue: number, branch: string): string;
+export declare function createWorktree(projectDir: string, issue: number, branch: string, suffix?: string): string;
 /**
  * Remove a git worktree, forcefully. No-op if the path is not a registered worktree.
  *

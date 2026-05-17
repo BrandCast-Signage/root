@@ -105,7 +105,8 @@ server.tool("board_start", "Start a new work stream for a GitHub issue. Fetches 
     parentIssue: zod_1.z.number().int().positive().optional().describe("Parent issue number if this stream is a decomposed sub-issue"),
     tier: zod_1.z.enum(["tier1", "tier2"]).optional().describe("Explicit tier override (e.g. from a user-supplied --tier flag). When omitted, the tier is classified from issue labels and title/body."),
     tierJustification: zod_1.z.string().optional().describe("Required when `tier` is supplied. Explain why the caller is overriding the classifier (e.g. \"user passed --tier 1\", \"touches prisma/schema.prisma per database-migrations-tier1 rule\"). Rejected if blank or whitespace."),
-}, async ({ issue, autoApprove, parentIssue, tier: tierOverride, tierJustification }) => {
+    groupId: zod_1.z.string().optional().describe("Parallel Execution Group identifier (e.g. \"A\", \"B\"). When supplied, appended to the worktree directory name as `-<groupId>` to prevent path collisions when multiple groups run concurrently for the same issue."),
+}, async ({ issue, autoApprove, parentIssue, tier: tierOverride, tierJustification, groupId }) => {
     // Reject unmotivated overrides up front. Recording *why* a tier was forced
     // is the whole point of v2's tierReason/tierSource — accepting a bare
     // override would defeat it.
@@ -157,13 +158,23 @@ server.tool("board_start", "Start a new work stream for a GitHub issue. Fetches 
     }
     // Build branch name: feat/<issue>-<slugified-title>
     const branchName = `feat/${issue}-${slugify(issueData.title)}`;
-    // Create the worktree.
-    const worktreePath = (0, worktree_js_1.createWorktree)(rootDir, issue, branchName);
+    // Create the worktree. When a groupId is provided, it is used as a suffix
+    // to disambiguate paths when multiple parallel groups run for the same issue.
+    const worktreePath = (0, worktree_js_1.createWorktree)(rootDir, issue, branchName, groupId);
     // Update stream with worktree path and branch.
-    const updated = (0, board_js_1.updateStream)(rootDir, issue, {
-        worktreePath,
-        branch: branchName,
-    });
+    // When a groupId is present, also record the path on the group assignment
+    // so the orchestrator can reference each group's worktree independently.
+    const groupUpdates = { worktreePath, branch: branchName };
+    if (groupId !== undefined && groupId.trim().length > 0) {
+        const trimmedGroupId = groupId.trim();
+        const existingGroups = stream.groups ?? {};
+        const existingGroup = existingGroups[trimmedGroupId] ?? { harness: null, status: "pending", worktreePath: null };
+        groupUpdates.groups = {
+            ...existingGroups,
+            [trimmedGroupId]: { ...existingGroup, worktreePath },
+        };
+    }
+    const updated = (0, board_js_1.updateStream)(rootDir, issue, groupUpdates);
     nonFatal("setLabel:root:planning", () => (0, github_js_1.setLabel)(issue, "root:planning"));
     // Sync the linked GitHub Project v2 item to "In Progress" — feature is
     // gated on `board.githubProject` being present in `root.config.json`.
