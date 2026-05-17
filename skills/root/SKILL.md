@@ -332,9 +332,21 @@ Read `root.config.json` to get `project.plansDir` and `project.prdsDir`.
    - Verification commands from `root.config.json` → `validation`
    - No persistent artifact needed — the commit message and PR description serve as source of record
 
-3. **Record the plan path**: After `EnterPlanMode` returns, the harness provides the plan file path (e.g. `.claude/plans/<slug>.md`). Call `board_set_plan_path` with the issue number and that path to persist it on the stream record. This ensures `board_status` surfaces the plan location and gates have a concrete `planPath` to evaluate — without it the stream stays stuck at `planning` indefinitely.
+3. **Record the plan path — MANDATORY verification before proceeding**: After `EnterPlanMode` returns, the harness provides the plan file path (e.g. `.claude/plans/<slug>.md`).
 
-4. **Update session state**: Call `board_run` with the issue number. For Tier 2 the `plan_approval` gate defaults to `auto`, so the stream will advance automatically.
+   a. **Verify the path exists on disk.** Use the Read tool or `test -f <path>` to confirm the file is present and readable. If the path is missing, empty, or unreadable, halt with:
+      > "Tier 2 plan path could not be resolved (EnterPlanMode returned no usable path). The stream will stay at `planning` until this is fixed. Investigate the harness return value before continuing."
+      Do NOT call `board_set_plan_path`.
+
+   b. **Call `board_set_plan_path`** with the issue number and the verified path. If `board_set_plan_path` returns an error, halt with:
+      > "`board_set_plan_path` returned an error: `<error>`. The plan path was not persisted. The stream will stay at `planning`. Resolve the MCP error before continuing."
+      Do NOT call `board_run`.
+
+   c. **Check resulting stream status.** Call `board_status` with the issue number. If the status is not `plan-ready`, halt with:
+      > "`board_set_plan_path` did not advance the stream to `plan-ready`. Current status: `<status>`. Halting."
+      Do NOT call `board_run`.
+
+4. **Update session state** (only reached if step 3's checks all passed): Call `board_run` with the issue number. For Tier 2 the `plan_approval` gate defaults to `auto`, so the stream will advance automatically.
 
 The plan is ready when the user approves it via plan mode. GitHub issue/PR linkage provides traceability.
 
