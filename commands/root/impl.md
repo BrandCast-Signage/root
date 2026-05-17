@@ -309,6 +309,7 @@ For each group in the batch, make an Agent tool call with:
   - Explicit instruction to mark each Change Manifest entry `[~]` on start and `[x] (<sha>)` on completion
   - Explicit instruction to commit in conventional format, one commit per logical unit within the group
   - **If the group letter is in the migration group set (from Step 1)**, paste the full "Database Migration Safety" section from the plan AND the Migration Hard Rules block below, verbatim, into the prompt
+  - **When spawning multiple groups in parallel for a single issue**, the subagent prompt MUST instruct the subagent to call `board_start` with `groupId: "<group-letter>"` (e.g. `groupId: "A"` for Group A, `groupId: "B"` for Group B). The orchestrator passes the group letter explicitly. Without `groupId`, all parallel subagents will attempt to create the same worktree path (`<project>-<issue>`) and the second `git worktree add` will fail. Example directive to include in the subagent prompt: "Call `board_start({ issue: <N>, groupId: \"<letter>\" })` before beginning work — this creates a uniquely-named worktree `<project>-<N>-<letter>` for this group."
 
 **Migration Hard Rules** (inline verbatim into implementer prompts for migration groups):
 
@@ -607,11 +608,17 @@ If review comments found, resolve each finding using full local context (Impleme
 
 **10e (auto). Merge**
 
-Squash merge automatically:
+Execute the following as a single chained operation. Do not return to the user between steps:
+
 ```bash
-gh pr merge <pr-number> --squash --delete-branch
+gh pr checks <pr-number> --watch \
+  && gh pr merge <pr-number> --squash --delete-branch \
+  && git worktree remove <worktree-path> --force
 ```
-Update the board stream to `merged` via `board_run`. Post a completion comment on the linked issue.
+
+Then call `board_delete({ issue: <issue> })` to remove the stream record. `board_delete` cascades to worktree cleanup, so any board-tracked worktree paths are also removed. Post a completion comment on the linked issue.
+
+This is one operation. Do not return to the user between the create and merge phases under `--auto`.
 
 ---
 
