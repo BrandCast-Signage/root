@@ -339,7 +339,24 @@ You are modifying database migration files. These rules are non-negotiable. Viol
 
 Where a group has an associated test task, you may spawn `team-tester` in parallel with the implementer (same worktree) OR instruct the implementer to write tests itself — prefer the former for Tier 1 groups with non-trivial test surface.
 
-All agents in a batch run in parallel. Wait for the whole batch before proceeding to the next. When the batch completes, their worktree changes are ready for review in Step 7.
+All agents in a batch run in parallel. Wait for the whole batch before proceeding to the next.
+
+**Subagent failure detection — required before advancing past any batch.** After the batch returns, inspect every subagent result for failure signals before proceeding:
+
+- Agent returned an error or timed out (no result block at all)
+- Agent's Result block contains `[~]` partial markers or an explicit "failed" / "blocked" status
+- Agent's commit did not land (no new SHA appears on the branch for that group — check with `git log --oneline -<n>`)
+
+On **any** failure:
+
+1. **Do not silently advance.** Stop dispatching further batches or groups.
+2. Call `board_run` with a `blocked` signal to mark the stream `blocked`.
+3. Fire `sendDiscord('blocker', ...)` with the failed group letter, task description, and reason — mirroring the epic-mode blocker signal in Step A3 bullet 8 of `/root skill`.
+4. Surface a user-visible error:
+   > "Execution Group `<letter>`: subagent for `<task>` failed/crashed/returned partial. Halting before proceeding to next group. Inspect agent output and re-run after resolving."
+5. Stop.
+
+When the batch completes without failures, their worktree changes are ready for review in Step 7.
 
 #### Sequential Execution (Gemini CLI)
 
