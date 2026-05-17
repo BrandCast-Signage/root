@@ -279,14 +279,31 @@ Read `root.config.json` to get `project.plansDir` and `project.prdsDir`.
 
 **Delegation is mandatory.** The main thread does not write the Implementation Plan or trace code paths — it coordinates the team. Follow this sequence exactly.
 
-1. **Check for PRD**: Look for a PRD in `<prdsDir>` that matches the issue or task slug.
-   - If no PRD exists, tell the user:
+1. **Check for PRD**: Look for a PRD in `<prdsDir>` that matches the issue or task slug. Three branches:
+
+   **Branch A — PRD file exists**: Use that file as the PRD input for step 2. Continue.
+
+   **Branch B — No PRD file; issue body qualifies (`isIssueBodyPRDEquivalent` → true)**:
+   `isIssueBodyPRDEquivalent` returns true when the issue body contains ALL THREE of:
+   - A problem statement or motivation section (describes *why* the change is needed)
+   - A scoped fix path or technical approach (describes *what* will change and *how*)
+   - Acceptance criteria — an explicit `## Acceptance criteria` heading, or a clearly-marked equivalent such as a bulleted "Acceptance", "Done when", or "Definition of done" section
+
+   If all three are present, skip `/root:prd new` entirely. Tell the user one line:
+   > "Issue body satisfies PRD requirements (problem + approach + acceptance criteria). Skipping `/root:prd new`; passing issue body to `team-architect`."
+
+   Use the issue body verbatim as the PRD input for step 2. No interview. No file written.
+
+   **Branch C — No PRD file; issue body does NOT qualify (`isIssueBodyPRDEquivalent` → false)**:
+   - **When `--auto` is NOT set**: tell the user:
      > "Tier 1 requires a PRD before the implementation plan. Starting guided PRD authoring."
-   - Run `/root:prd new <task description or issue number>` to guide the user through PRD creation.
-   - After the PRD is written, continue to step 2 below. Do not stop or ask the user to re-run `/root`.
+     Run `/root:prd new <task description or issue number>` to guide the user through PRD creation. After the PRD is written, continue to step 2. Do not stop or ask the user to re-run `/root`.
+   - **When `--auto` IS set**: do NOT call `/root:prd new` — it invokes `AskUserQuestion` during its Phase 2 interview, which is a protocol violation under `--auto`. Instead, tell the user one line:
+     > "Under `--auto`, the issue body is incomplete but Root must not interview. Passing issue body to `team-architect` with instruction to scope independently."
+     Use the issue body as the PRD input for step 2, and include in the architect prompt an explicit note that the issue body is underspecified and the architect should produce its own scoping in the Implementation Plan.
 
 2. **Spawn `team-architect`**: Use the Agent tool with `subagent_type: "team-architect"` and a prompt that:
-   - Points the architect at the PRD file path
+   - Points the architect at the PRD input — either the PRD file path (Branch A) or the issue body text (Branches B and C)
    - Points at `<plansDir>/TEMPLATE.md` as the required format
    - Points at `root.config.json` for coding standards and validation commands
    - Lists the agent recommendations from Step 5 as suggested Execution Group owners
