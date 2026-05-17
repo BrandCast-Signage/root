@@ -21,6 +21,8 @@ Root reads project-specific settings from `root.config.json` in the project root
 
 Execute all steps in order. Steps 1-7 run autonomously. Step 8 drives planning (tier-dependent). Step 9 generates tasks after plan approval.
 
+> **CARDINAL UNDER `--auto`**: when CI on a PR you opened goes green, the next action is `gh pr merge --squash --delete-branch` — NOT a status report and NOT a confirmation prompt. Asking the user to type "merge" or "yes" is a protocol violation. The full `--auto` contract is defined in Step 0's "--auto flag behavior" table below; this is the one-line summary you must internalize before reading anything else.
+
 ### Step 0: Dispatch
 
 `/root` is both the task entry point AND the orchestration driver. Re-running `/root #<issue>` is the universal "continue" gesture — every invocation inspects stream state and advances to the next actionable phase.
