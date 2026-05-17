@@ -16,6 +16,17 @@
 PROJECT_DIR="$PWD"
 CONFIG="$PROJECT_DIR/root.config.json"
 
+# Normalize CONFIG path for native Windows python3 (Git Bash / MSYS / Cygwin
+# produce POSIX paths like /c/Users/... that Windows Python cannot open).
+# cygpath -m yields C:/Users/... (mixed form) which works in Windows Python.
+# On POSIX systems cygpath is absent and CONFIG_PY stays equal to CONFIG.
+if command -v cygpath &>/dev/null; then
+  CONFIG_PY="$(cygpath -m "$CONFIG" 2>/dev/null)"
+else
+  CONFIG_PY="$CONFIG"
+fi
+[[ -z "$CONFIG_PY" ]] && CONFIG_PY="$CONFIG"
+
 # Plugin/extension root (for scripts)
 PLUGIN_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 
@@ -95,7 +106,7 @@ fi
 
 # --- Migrate config if needed ---
 if [[ -f "$CONFIG" ]]; then
-  CONFIG_VERSION=$(python3 -c "import json; print(json.load(open('$CONFIG')).get('configVersion', 0))" 2>/dev/null || echo "0")
+  CONFIG_VERSION=$(python3 -c "import json; print(json.load(open('$CONFIG_PY')).get('configVersion', 0))" 2>/dev/null || echo "0")
 
   if [[ "$CONFIG_VERSION" -lt "$CURRENT_CONFIG_VERSION" ]]; then
     echo "Root: Migrating root.config.json (v${CONFIG_VERSION} → v${CURRENT_CONFIG_VERSION})..."
@@ -103,7 +114,7 @@ if [[ -f "$CONFIG" ]]; then
     python3 -c "
 import json
 
-config_path = '$CONFIG'
+config_path = '$CONFIG_PY'
 with open(config_path) as f:
     config = json.load(f)
 
@@ -141,7 +152,7 @@ fi
 
 # --- Auto-ingest if DB is empty ---
 if [[ -f "$CONFIG" ]]; then
-  DB_REL_PATH=$(python3 -c "import json; print(json.load(open('$CONFIG')).get('ingest', {}).get('dbPath', '.root/rag-db'))" 2>/dev/null || echo ".root/rag-db")
+  DB_REL_PATH=$(python3 -c "import json; print(json.load(open('$CONFIG_PY')).get('ingest', {}).get('dbPath', '.root/rag-db'))" 2>/dev/null || echo ".root/rag-db")
   DB_PATH="$PROJECT_DIR/$DB_REL_PATH"
 
   # Check if DB has documents (lancedb creates a directory)
