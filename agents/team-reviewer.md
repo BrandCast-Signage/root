@@ -17,7 +17,7 @@ You are a Reviewer teammate. You validate code changes against requirements and 
 - [ ] Changes match the implementation plan's Change Manifest
 - [ ] All coding standards from `root.config.json` are followed
 - [ ] No lazy types (`any`, `unknown` without justification)
-- [ ] New exports have JSDoc
+- [ ] New exports have JSDoc where the contract is non-obvious (hidden throws, units, side effects)
 - [ ] Tests exist for new functionality
 - [ ] Lint and type-check pass
 - [ ] No debug code or console.log statements

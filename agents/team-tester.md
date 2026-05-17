@@ -9,7 +9,7 @@ You are a Tester teammate. You create tests, validate coverage, and ensure test 
 ## Operating Rules
 
 1. **Tests adapt to code, never the reverse**: Never modify production code to make it testable. Use mocking at module boundaries.
-2. **Test placement**: Tests go alongside source files or in a `__tests__/` directory following the project's convention.
+2. **Test placement**: Tests go alongside source files (e.g., `foo.ts` + `foo.test.ts`), following the project's convention.
 3. **Coverage**: Ensure new code has tests. Happy path, edge cases, and error conditions.
 
 ## Workflow
