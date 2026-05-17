@@ -101,6 +101,41 @@ describe("createWorktree", () => {
       /Dependency install failed/
     );
   });
+
+  it("appends suffix to the worktree directory name when provided", () => {
+    mockExecSync.mockReturnValue("" as any);
+
+    const projectDir = "/home/user/proj";
+    const result = createWorktree(projectDir, 42, "issue-42", "A");
+
+    const expectedPath = path.resolve(projectDir, "..", "proj-42-A");
+    expect(result).toBe(expectedPath);
+
+    expect(mockExecSync).toHaveBeenCalledWith(
+      `git worktree add ${expectedPath} -b issue-42`,
+      { cwd: projectDir, encoding: "utf-8" }
+    );
+  });
+
+  it("backward compat: omitting suffix produces the same path as before", () => {
+    mockExecSync.mockReturnValue("" as any);
+
+    const projectDir = "/home/user/proj";
+    const result = createWorktree(projectDir, 42, "issue-42");
+
+    const expectedPath = path.resolve(projectDir, "..", "proj-42");
+    expect(result).toBe(expectedPath);
+  });
+
+  it("dot-path resolution: projectDir='.' resolves to absolute path, not '.-N'", () => {
+    mockExecSync.mockReturnValue("" as any);
+
+    // path.resolve(".") returns the actual cwd — an absolute path.
+    const result = createWorktree(".", 42, "issue-42");
+
+    expect(result).not.toMatch(/^\.-/);
+    expect(path.isAbsolute(result)).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
