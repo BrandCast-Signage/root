@@ -388,7 +388,7 @@ For each child in declared order:
 
 5. **Append summary to shared-context.** One concise entry per child: issue number, commit SHAs, files touched, deviations, target metrics. This is what protects against auto-compact — the orchestrator may forget what the child did, but the file remembers.
 
-6. **Update / open PR.** On first completed child: open the PR — as **ready-for-review** when `--auto` is set (`gh pr create --base main --head <epicBranch>`), or as **draft** otherwise (`gh pr create --draft --base main --head <epicBranch>`). On every subsequent child: `gh pr edit` to refresh the body, adding the new `Closes #<n>` line and the new check entry. PR title:
+6. **Update / open PR.** On first completed child: open the PR — as **ready-for-review** when `--auto` is set, or as **draft** otherwise. On every subsequent child: `gh pr edit` to refresh the body, adding the new `Closes #<n>` line and the new check entry. PR title:
    - Epic: `<epic-title> (epic #<epic-num>)`
    - Batch: `chore: batch fixes (#x, #y, #z)`
    PR body sketch:
@@ -402,6 +402,13 @@ For each child in declared order:
    Closes #101
    Closes #102
    ```
+   Under `--auto`, the create → watch → merge sequence for a single child is one atomic step from the orchestrator's perspective:
+   ```bash
+   gh pr create --base main --head <epicBranch> --title "<title>" --body "<body>" \
+     && gh pr checks <pr-num> --watch \
+     && gh pr merge <pr-num> --squash --delete-branch
+   ```
+   Do not surface CI status updates to the user between `gh pr create` and `gh pr merge` — those are internal progress states, not user-facing checkpoints. Under `--draft` (non-`--auto`), skip the watch and merge commands; the PR stays draft until the user flips it.
 
 7. **Project sync per child.** `board_start` already sets the child's Project Status to `In Progress` (issue #8). The native PR-linked workflow will move each `Closes #<n>` issue to `Review` once the PR is opened.
 
@@ -417,11 +424,17 @@ When all children complete successfully:
 
 **If `--auto` is set** (autonomous completion path):
 
-4. Squash-merge the PR: `gh pr merge <pr-num> --squash --delete-branch`.
-5. Update parent stream status to `merged`.
-6. Clean up the worktree: `git worktree remove <worktree-path> --force`.
-7. Delete the parent stream from the board: `board_delete({ issue: <epic-or-batch-num> })`.
-8. Print a concise summary: which children landed (issue numbers + titles), the merge SHA, and a one-line note on what shipped.
+Execute the following as a single chained operation. Do not return to the user between steps:
+
+```bash
+gh pr checks <pr-num> --watch \
+  && gh pr merge <pr-num> --squash --delete-branch \
+  && git worktree remove <worktree-path> --force
+```
+
+Then call `board_delete({ issue: <epic-or-batch-num> })` to remove the parent stream, and print a concise summary: which children landed (issue numbers + titles), the merge SHA, and a one-line note on what shipped.
+
+This is one operation. Do not return to the user between `gh pr create` and `gh pr merge` — CI status updates are not user-facing checkpoints. Returning to the user after opening the PR but before merging it is a protocol violation under `--auto`.
 
 **If CI is red, branch protection blocks the merge, or a merge conflict exists** (regardless of `--auto`): park at `pr-ready`, fire `sendDiscord('blocker', ...)` describing the external gate, and surface the blocker to the user. `--auto` does not bypass branch-protection rules or required reviews — it removes only the human gates Root itself imposes.
 
