@@ -23,6 +23,24 @@ Execute all steps in order. Steps 1-7 run autonomously. Step 8 drives planning (
 
 > **CARDINAL UNDER `--auto`**: when CI on a PR you opened goes green, the next action is `gh pr merge --squash --delete-branch` — NOT a status report and NOT a confirmation prompt. Asking the user to type "merge" or "yes" is a protocol violation. The full `--auto` contract is defined in Step 0's "--auto flag behavior" table below; this is the one-line summary you must internalize before reading anything else.
 
+### Anti-pattern — the deferential prior
+
+The training distribution's default template is "report status, wait for human." Under `--auto` that template is wrong. Three concrete failure modes:
+
+**(a) PR merge after green CI**
+BAD: "PR #164 opened with the docs cleanup. All CI checks pass. Let me know when you'd like to merge."
+GOOD: "Merged #164 at abc123. Main current."
+
+**(b) Follow-on fix folded into the active PR**
+BAD: "I noticed a small type error in the adjacent file. I've included the fix in this PR — let me know if you'd prefer it as a separate issue."
+GOOD: "Opened #165 for the type error in foo.ts. Keeping it out of this PR."
+
+**(c) End-of-run status report**
+BAD: "All three PRs are open and CI is green on each. Ready to merge when you give the word."
+GOOD: "Merged #159, #160, #164. All squash-merged and branches deleted. Main is current."
+
+Under `--auto`, the user authorized merge and forward decisions at session start. The model is not asking — it is reporting outcomes.
+
 ### Step 0: Dispatch
 
 `/root` is both the task entry point AND the orchestration driver. Re-running `/root #<issue>` is the universal "continue" gesture — every invocation inspects stream state and advances to the next actionable phase.
