@@ -5,6 +5,14 @@ All notable changes to the Root development workflow framework are documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] — 2026-05-17
+
+### Added
+
+- **Scope-signal heuristic for automatic Tier 1 → Tier 2 downgrade.** `classifyTier` now runs a secondary `scopeSignal` check after any classifier-resolved Tier 1 result. When all three signals hold simultaneously — `small` (≤3 file paths), `locked` (AC/Done-when heading with ≥2 bullets), and `mechanical` (mechanical keyword in title/first paragraph, or a named Fix path section) — the tier is downgraded to Tier 2 and the reason is embedded in the `Tier:` response line. User-supplied tier overrides short-circuit before `classifyTier` is called, so the downgrade never fires on explicit overrides. Closes #20.
+- `scopeSignal(issue)` exported from `classify.ts` with a `ScopeSignal` interface (`small`, `locked`, `mechanical`, `downgrade`, `reasons`).
+- `SKILL.md` Step 3 documentation updated to describe the scope-signal downgrade behavior and the three signals.
+
 ## [2.3.2] — 2026-04-19
 
 ### Fixed
