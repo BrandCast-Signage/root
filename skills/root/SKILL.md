@@ -151,6 +151,20 @@ Tier classification is owned by the MCP. `board_start` inspects the issue's labe
 | **Tier 1** (Full Process) | `type:refactor`/`type:epic`/`type:security` labels, or Tier 1 keywords (refactor, migration, rewrite, schema change, architecture) in title/body. (`type:feature` is **not** a Tier 1 signal — triage over-applies it; feature issues classify by keywords.) |
 | **Tier 2** (Light Process) | `type:bug`/`type:chore`/`type:docs`/`type:dependencies` labels, or Tier 2 keywords (fix, typo, bump, patch, hotfix, update dep). Also the policy for ambiguous cases. |
 
+**Scope-signal downgrade (automatic).** After the classifier resolves Tier 1, `classifyTier` runs a secondary `scopeSignal` check. When ALL THREE of the following hold simultaneously, the result is quietly downgraded to Tier 2:
+
+- **small** — ≤3 distinct file paths referenced in the issue body (from a `## Files affected` section if present, otherwise the full body).
+- **locked** — the body contains a `## Acceptance criteria`, `## Acceptance`, or `## Done when` heading with ≥2 bullet lines beneath it.
+- **mechanical** — the issue title or the first paragraph (before the first `##` heading) contains a mechanical keyword (`rename`, `signature`, `single-file`, `one-line`, `typo`, `bump`, `extract`, `inline`, `move`, `split`, `merge`), OR a `## Fix:` / `## Fix path:` section names a specific function or code location.
+
+When the downgrade fires, `board_start`'s `Tier:` response line reads:
+```
+Tier: tier2 (classifier: Tier downgraded by scope signal (small (N files) + locked (AC/done-when) + mechanical (keyword: X)); original label/keyword classification was tier1)
+```
+Surface this reason to the user in the Step 7 summary so the downgrade is visible.
+
+User-supplied tier overrides short-circuit before `classifyTier` is called, so this downgrade **never fires when the user explicitly passes a tier**.
+
 Your job in this step: extract an explicit user override from the argument, if one was given.
 
 - If the user said "tier 1" / "full process" / "--tier 1" → pass `tier: "tier1"` AND `tierJustification: "<exact phrase the user used>"` to `board_start` in Step 6.
