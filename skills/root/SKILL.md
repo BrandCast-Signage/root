@@ -21,6 +21,26 @@ Root reads project-specific settings from `root.config.json` in the project root
 
 Execute all steps in order. Steps 1-7 run autonomously. Step 8 drives planning (tier-dependent). Step 9 generates tasks after plan approval.
 
+> **CARDINAL UNDER `--auto`**: when CI on a PR you opened goes green, the next action is `gh pr merge --squash --delete-branch` — NOT a status report and NOT a confirmation prompt. Asking the user to type "merge" or "yes" is a protocol violation. The full `--auto` contract is defined in Step 0's "--auto flag behavior" table below; this is the one-line summary you must internalize before reading anything else.
+
+### Anti-pattern — the deferential prior
+
+The training distribution's default template is "report status, wait for human." Under `--auto` that template is wrong. Three concrete failure modes:
+
+**(a) PR merge after green CI**
+BAD: "PR #164 opened with the docs cleanup. All CI checks pass. Let me know when you'd like to merge."
+GOOD: "Merged #164 at abc123. Main current."
+
+**(b) Follow-on fix folded into the active PR**
+BAD: "I noticed a small type error in the adjacent file. I've included the fix in this PR — let me know if you'd prefer it as a separate issue."
+GOOD: "Opened #165 for the type error in foo.ts. Keeping it out of this PR."
+
+**(c) End-of-run status report**
+BAD: "All three PRs are open and CI is green on each. Ready to merge when you give the word."
+GOOD: "Merged #159, #160, #164. All squash-merged and branches deleted. Main is current."
+
+Under `--auto`, the user authorized merge and forward decisions at session start. The model is not asking — it is reporting outcomes.
+
 ### Step 0: Dispatch
 
 `/root` is both the task entry point AND the orchestration driver. Re-running `/root #<issue>` is the universal "continue" gesture — every invocation inspects stream state and advances to the next actionable phase.
@@ -259,14 +279,31 @@ Read `root.config.json` to get `project.plansDir` and `project.prdsDir`.
 
 **Delegation is mandatory.** The main thread does not write the Implementation Plan or trace code paths — it coordinates the team. Follow this sequence exactly.
 
-1. **Check for PRD**: Look for a PRD in `<prdsDir>` that matches the issue or task slug.
-   - If no PRD exists, tell the user:
+1. **Check for PRD**: Look for a PRD in `<prdsDir>` that matches the issue or task slug. Three branches:
+
+   **Branch A — PRD file exists**: Use that file as the PRD input for step 2. Continue.
+
+   **Branch B — No PRD file; issue body qualifies (`isIssueBodyPRDEquivalent` → true)**:
+   `isIssueBodyPRDEquivalent` returns true when the issue body contains ALL THREE of:
+   - A problem statement or motivation section (describes *why* the change is needed)
+   - A scoped fix path or technical approach (describes *what* will change and *how*)
+   - Acceptance criteria — an explicit `## Acceptance criteria` heading, or a clearly-marked equivalent such as a bulleted "Acceptance", "Done when", or "Definition of done" section
+
+   If all three are present, skip `/root:prd new` entirely. Tell the user one line:
+   > "Issue body satisfies PRD requirements (problem + approach + acceptance criteria). Skipping `/root:prd new`; passing issue body to `team-architect`."
+
+   Use the issue body verbatim as the PRD input for step 2. No interview. No file written.
+
+   **Branch C — No PRD file; issue body does NOT qualify (`isIssueBodyPRDEquivalent` → false)**:
+   - **When `--auto` is NOT set**: tell the user:
      > "Tier 1 requires a PRD before the implementation plan. Starting guided PRD authoring."
-   - Run `/root:prd new <task description or issue number>` to guide the user through PRD creation.
-   - After the PRD is written, continue to step 2 below. Do not stop or ask the user to re-run `/root`.
+     Run `/root:prd new <task description or issue number>` to guide the user through PRD creation. After the PRD is written, continue to step 2. Do not stop or ask the user to re-run `/root`.
+   - **When `--auto` IS set**: do NOT call `/root:prd new` — it invokes `AskUserQuestion` during its Phase 2 interview, which is a protocol violation under `--auto`. Instead, tell the user one line:
+     > "Under `--auto`, the issue body is incomplete but Root must not interview. Passing issue body to `team-architect` with instruction to scope independently."
+     Use the issue body as the PRD input for step 2, and include in the architect prompt an explicit note that the issue body is underspecified and the architect should produce its own scoping in the Implementation Plan.
 
 2. **Spawn `team-architect`**: Use the Agent tool with `subagent_type: "team-architect"` and a prompt that:
-   - Points the architect at the PRD file path
+   - Points the architect at the PRD input — either the PRD file path (Branch A) or the issue body text (Branches B and C)
    - Points at `<plansDir>/TEMPLATE.md` as the required format
    - Points at `root.config.json` for coding standards and validation commands
    - Lists the agent recommendations from Step 5 as suggested Execution Group owners
@@ -386,7 +423,7 @@ For each child in declared order:
 
 5. **Append summary to shared-context.** One concise entry per child: issue number, commit SHAs, files touched, deviations, target metrics. This is what protects against auto-compact — the orchestrator may forget what the child did, but the file remembers.
 
-6. **Update / open PR.** On first completed child: open the PR — as **ready-for-review** when `--auto` is set (`gh pr create --base main --head <epicBranch>`), or as **draft** otherwise (`gh pr create --draft --base main --head <epicBranch>`). On every subsequent child: `gh pr edit` to refresh the body, adding the new `Closes #<n>` line and the new check entry. PR title:
+6. **Update / open PR.** On first completed child: open the PR — as **ready-for-review** when `--auto` is set, or as **draft** otherwise. On every subsequent child: `gh pr edit` to refresh the body, adding the new `Closes #<n>` line and the new check entry. PR title:
    - Epic: `<epic-title> (epic #<epic-num>)`
    - Batch: `chore: batch fixes (#x, #y, #z)`
    PR body sketch:
@@ -400,6 +437,13 @@ For each child in declared order:
    Closes #101
    Closes #102
    ```
+   Under `--auto`, the create → watch → merge sequence for a single child is one atomic step from the orchestrator's perspective:
+   ```bash
+   gh pr create --base main --head <epicBranch> --title "<title>" --body "<body>" \
+     && gh pr checks <pr-num> --watch \
+     && gh pr merge <pr-num> --squash --delete-branch
+   ```
+   Do not surface CI status updates to the user between `gh pr create` and `gh pr merge` — those are internal progress states, not user-facing checkpoints. Under `--draft` (non-`--auto`), skip the watch and merge commands; the PR stays draft until the user flips it.
 
 7. **Project sync per child.** `board_start` already sets the child's Project Status to `In Progress` (issue #8). The native PR-linked workflow will move each `Closes #<n>` issue to `Review` once the PR is opened.
 
@@ -415,11 +459,17 @@ When all children complete successfully:
 
 **If `--auto` is set** (autonomous completion path):
 
-4. Squash-merge the PR: `gh pr merge <pr-num> --squash --delete-branch`.
-5. Update parent stream status to `merged`.
-6. Clean up the worktree: `git worktree remove <worktree-path> --force`.
-7. Delete the parent stream from the board: `board_delete({ issue: <epic-or-batch-num> })`.
-8. Print a concise summary: which children landed (issue numbers + titles), the merge SHA, and a one-line note on what shipped.
+Execute the following as a single chained operation. Do not return to the user between steps:
+
+```bash
+gh pr checks <pr-num> --watch \
+  && gh pr merge <pr-num> --squash --delete-branch \
+  && git worktree remove <worktree-path> --force
+```
+
+Then call `board_delete({ issue: <epic-or-batch-num> })` to remove the parent stream, and print a concise summary: which children landed (issue numbers + titles), the merge SHA, and a one-line note on what shipped.
+
+This is one operation. Do not return to the user between `gh pr create` and `gh pr merge` — CI status updates are not user-facing checkpoints. Returning to the user after opening the PR but before merging it is a protocol violation under `--auto`.
 
 **If CI is red, branch protection blocks the merge, or a merge conflict exists** (regardless of `--auto`): park at `pr-ready`, fire `sendDiscord('blocker', ...)` describing the external gate, and surface the blocker to the user. `--auto` does not bypass branch-protection rules or required reviews — it removes only the human gates Root itself imposes.
 
