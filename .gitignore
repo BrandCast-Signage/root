@@ -7,3 +7,6 @@ node_modules/
 
 # Extension local RAG test folder
 test-rag/
+
+# Per-project Root state (RAG db, board records) — local only
+.root/

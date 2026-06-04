@@ -289,29 +289,39 @@ Batch 2: Group C (depends on A), Group D (depends on B)
 Batch 3: Group E (depends on C and D)
 ```
 
-### Step 6: Execute Groups
+### Step 6: Execute Groups via the Tier 1 Workflow
 
-For each batch of parallel-ready groups:
+Tier 1 execution is owned by a deterministic **Workflow script**, not by hand-rolled prose orchestration. You do NOT spawn implementer/reviewer agents one-by-one from the main thread, and you do NOT edit files in the main thread. You build a structured argument object from the parsed plan, invoke the `Workflow` tool once (auto mode) or once per batch (manual mode), and act on the structured result. Invoking the `Workflow` tool here is explicitly authorized — these instructions require it.
 
-#### Parallel Execution (Claude Code) — MANDATORY for Tier 1
+The script lives inside the plugin at `workflows/tier1-execution.mjs`. Resolve its absolute path first:
 
-You MUST spawn one `team-implementer` agent per group using the Agent tool. Do NOT edit files in the main thread. Do NOT execute a group yourself "because it's small". Delegation is the rule, not an optimization.
+```bash
+echo "$CLAUDE_PLUGIN_ROOT/workflows/tier1-execution.mjs"
+```
 
-For each group in the batch, make an Agent tool call with:
-- `subagent_type: "team-implementer"`
-- `isolation: "worktree"` (gives each agent its own git worktree)
-- A self-contained prompt containing:
-  - Path to the plan file and the group letter (so the implementer can re-read it)
-  - The group's Change Manifest entries in full (file paths, actions, sections, descriptions, linked REQ IDs)
-  - The group's test task (file and scenarios)
-  - Coding standards from `root.config.json` → `codingStandards`
-  - Validation commands from `root.config.json` → `validation`
-  - Explicit instruction to mark each Change Manifest entry `[~]` on start and `[x] (<sha>)` on completion
-  - Explicit instruction to commit in conventional format, one commit per logical unit within the group
-  - **If the group letter is in the migration group set (from Step 1)**, paste the full "Database Migration Safety" section from the plan AND the Migration Hard Rules block below, verbatim, into the prompt
-  - **When spawning multiple groups in parallel for a single issue**, the subagent prompt MUST instruct the subagent to call `board_start` with `groupId: "<group-letter>"` (e.g. `groupId: "A"` for Group A, `groupId: "B"` for Group B). The orchestrator passes the group letter explicitly. Without `groupId`, all parallel subagents will attempt to create the same worktree path (`<project>-<issue>`) and the second `git worktree add` will fail. Example directive to include in the subagent prompt: "Call `board_start({ issue: <N>, groupId: \"<letter>\" })` before beginning work — this creates a uniquely-named worktree `<project>-<N>-<letter>` for this group."
+#### 6a. Build the workflow args
 
-**Migration Hard Rules** (inline verbatim into implementer prompts for migration groups):
+From the data parsed in Steps 1 and 5, construct this object (pass it as the `Workflow` tool's `args`):
+
+```
+{
+  issue:           <board issue number>,
+  planPath:        <plan file path>,
+  autoApprove:     <stream.autoApprove>,
+  codingStandards: <root.config.json → codingStandards array>,
+  validation:      { lintCommand: <…>, testCommand: <…> },
+  migrationGroups: <array of group letters in the migration group set from Step 1>,
+  migrationSafety: <verbatim "Database Migration Safety" section text, or null>,
+  migrationRules:  <the verbatim "Migration Hard Rules" block below, or null if no migration groups>,
+  batches:         <the ordered batches from Step 5; each batch = { groups: [ … ] },
+                    each group = { letter, name, sequence, testTask,
+                                   changes: [ { num, file, action, section, description, reqs } ] }>
+}
+```
+
+The workflow runs one `team-implementer` agent per group **in parallel** within a batch; each agent calls `board_start({ issue, groupId })` to get its own board worktree (`<project>-<issue>-<letter>`) — this is the durable, board-tracked worktree that PR/merge/cleanup rely on, NOT an ephemeral harness worktree. Each batch is then gated by a `team-reviewer` agent in a loop-until-PASS; the workflow re-spawns the affected implementers on `ISSUES` and only advances to the next batch on `PASS`.
+
+**Migration Hard Rules** (passed verbatim as `migrationRules`; the workflow injects it into implementer prompts for migration groups):
 
 ```
 ## Database Migration Hard Rules — READ BEFORE TOUCHING ANY MIGRATION FILE
@@ -338,145 +348,41 @@ You are modifying database migration files. These rules are non-negotiable. Viol
 6. Triple-check before committing: (a) generated SQL read and matches intent, (b) every breaking-change risk explicitly addressed, (c) rollout order preserved. State each of these in the commit body.
 ```
 
-Where a group has an associated test task, you may spawn `team-tester` in parallel with the implementer (same worktree) OR instruct the implementer to write tests itself — prefer the former for Tier 1 groups with non-trivial test surface.
+The workflow writes tests as part of each implementer's deliverable and runs the reviewer gate per batch. You do not spawn `team-tester`, `team-implementer`, or `team-reviewer` yourself — the script does, with the correct parallelism, board worktrees, and review loop baked in.
 
-All agents in a batch run in parallel. Wait for the whole batch before proceeding to the next.
+#### 6b. Invoke the workflow
 
-**Subagent failure detection — required before advancing past any batch.** After the batch returns, inspect every subagent result for failure signals before proceeding:
+**Auto mode (`autoApprove: true`):** call the `Workflow` tool **once** with the resolved `scriptPath` and the full `args` (all batches). The workflow executes every batch end-to-end — implement → review-until-PASS → next batch — without returning between batches.
 
-- Agent returned an error or timed out (no result block at all)
-- Agent's Result block contains `[~]` partial markers or an explicit "failed" / "blocked" status
-- Agent's commit did not land (no new SHA appears on the branch for that group — check with `git log --oneline -<n>`)
+**Manual mode (`autoApprove: false`):** call the `Workflow` tool **once per batch**, passing `args` with `batches` sliced to that single batch. After each call returns, present the checkpoint (6c) and use `AskUserQuestion` (Continue to next batch / Review changes first / Stop here) before invoking the workflow for the next batch. This preserves per-batch human checkpoints, which a single all-batches run cannot.
 
-On **any** failure:
+#### 6c. Handle the result
 
-1. **Do not silently advance.** Stop dispatching further batches or groups.
-2. Call `board_run` with a `blocked` signal to mark the stream `blocked`.
-3. Fire `sendDiscord('blocker', ...)` with the failed group letter, task description, and reason — mirroring the epic-mode blocker signal in Step A3 bullet 8 of `/root skill`.
-4. Surface a user-visible error:
-   > "Execution Group `<letter>`: subagent for `<task>` failed/crashed/returned partial. Halting before proceeding to next group. Inspect agent output and re-run after resolving."
-5. Stop.
+The workflow returns one of two shapes.
 
-When the batch completes without failures, their worktree changes are ready for review in Step 7.
-
-#### Sequential Execution (Gemini CLI)
-
-Gemini CLI does not have native agent team support. Execute groups sequentially in dependency order. If multiple groups in a batch have no dependency relationship, suggest:
-```
-These groups are independent and can run in parallel.
-To parallelize, open additional Gemini CLI sessions in separate worktrees:
-  git worktree add ../<project>-group-b group-b
-  cd ../<project>-group-b && gemini
-```
-
-#### Per-Group Execution
-
-Whether parallel or sequential, each group follows this process:
-
-##### 6a. Announce
+**`{ status: "complete", completedBatches: [...] }`** — every batch implemented and reviewed PASS. For each entry in `completedBatches`, present a checkpoint:
 
 ```
----
-## Executing Group <letter>: <name>
-Changes: #1, #2, #3
-Sequence: types (#1) → service (#2) → route (#3)
-Tests: <test file and scenarios>
----
-```
+### Checkpoint: Group(s) <groups> Complete
 
-##### 6b. Implement Changes
-
-For each change in the group's sequence:
-1. **Read** the target file (if `modify` or `delete`)
-2. **Search** for existing patterns in the codebase (Glob/Grep). Follow the patterns you find.
-3. **Make the change**:
-   - `create`: Write the new file. Include all exports, types, and function signatures specified in the Change Manifest.
-   - `modify`: Edit the specified section/function. The Change Manifest describes what the current behavior is and what it becomes — follow that exactly.
-   - `delete`: Remove the file.
-4. **Follow coding standards** from `root.config.json` → `codingStandards`
-5. **Update the Change Manifest** in the plan file: change `[ ]` to `[~]` for this entry
-
-##### 6c. Generate Tests
-
-Tests are a required deliverable for every group:
-1. Read the group's test task (from the Execution Group section) for which test file and scenarios
-2. Search for existing test patterns in the project (test framework, file naming, import style)
-3. Write tests covering:
-   - **Happy path**: normal inputs produce expected outputs
-   - **Edge cases**: boundary values, empty inputs, nulls
-   - **Error conditions**: invalid inputs, missing dependencies, failure modes
-4. Run the tests to confirm they pass:
-   ```bash
-   # Use validation.testCommand scoped to the test file
-   ```
-5. If tests fail, fix the implementation or tests until they pass
-
-##### 6d. Validate
-
-1. Run lint/type-check:
-   ```bash
-   # Execute validation.lintCommand from root.config.json
-   ```
-   If it fails, fix the errors before proceeding.
-2. Run tests scoped to changed files:
-   ```bash
-   # Execute validation.testCommand with patterns matching changed files
-   ```
-3. Check coding standards: review each item in the Coding Standards checklist against this group's changes
-
-##### 6e. Commit the Group
-
-Create one commit for this group:
-- Conventional format: `feat(<scope>): <description>` or `fix(<scope>): <description>`
-- Include issue reference if available: `(#1132)`
-- Stage only this group's files: source changes + test files
-- Do NOT stage other groups' files
-
-##### 6f. Mark Complete
-
-Update the Change Manifest in the plan file:
-- Change `[~]` to `[x] (<sha>)` for each entry in this group
-- `<sha>` is the first 7 characters of the commit hash
-
-### Step 7: Checkpoint + Mandatory Review
-
-After each batch of groups completes, **spawn `team-reviewer` before presenting the checkpoint to the user**. This is not optional.
-
-Spawn `team-reviewer` with:
-- `subagent_type: "team-reviewer"`
-- A prompt containing: path to the plan file, group letters in this batch, list of commits from the batch, coding standards, validation commands
-- Instruction to validate the batch's changes against the Change Manifest, run lint/type-check/tests, and report PASS or a specific issue list
-
-If the reviewer returns issues, re-spawn the relevant `team-implementer` with the issue list and a directive to fix. Loop until reviewer returns PASS. Do NOT attempt fixes in the main thread.
-
-Once the reviewer returns PASS:
-
-- **Board update (if stream exists)**: If a board stream exists and ALL implementation groups are now complete, call `board_run` with the issue number to transition the stream to `validating`. Individual group completion is tracked in the plan file Change Manifest; the board stream status advances only when the full set of groups is done.
-
-Present the checkpoint to the user:
-
-```
-### Checkpoint: Group(s) <letters> Complete
-
-Files changed: <list>
-Tests added: <list of test files>
+Files changed: <changedFiles>
 Commits:
   <sha> — <message>
-  <sha> — <message>
 Review: PASS (team-reviewer)
-Lint: PASS/FAIL
-Tests: <n> passed, <n> failed
 
 Progress: <completed>/<total> groups
-Next batch: Group(s) <letters> (<n> changes)
 ```
 
-**If `autoApprove: true`:** skip the prompt. Log the checkpoint block above, proceed directly to Step 5 for the next batch.
+When ALL implementation groups are complete, call `board_run` with the issue number to transition the stream to `validating`. (Per-group completion is recorded in the plan file's Change Manifest by the implementers; the board status advances only when the full set is done.)
 
-**If manual:** Use AskUserQuestion:
-- **"Continue to next batch"** — proceed to Step 5 for next batch
-- **"Review changes first"** — show `git log --oneline -<n>` and `git diff HEAD~<n>` for this batch's commits, then ask again
-- **"Stop here"** — stop. User can resume later with `/root:impl resume`
+**`{ status: "blocked", batchIndex, groups, reason, migrationHalt, completedBatches }`** — a group failed, the reviewer never reached PASS within its round budget, or a migration deviation forced a halt. Do NOT advance:
+
+1. Call `board_run` with a `blocked` signal to mark the stream `blocked`.
+2. Fire `sendDiscord('blocker', ...)` with the failed `groups`, the issue, and `reason` — mirroring the epic-mode blocker signal in Step A3 bullet 8 of the `/root` skill.
+3. Surface a user-visible error:
+   > "Execution Group(s) `<groups>` (batch `<batchIndex>`) blocked: `<reason>`. Halting. Inspect the workflow output and re-run `/root:impl` after resolving."
+   If `migrationHalt` is true, prepend: "**Migration deviation — manual review required.**"
+4. Stop.
 
 ### Step 8: Generate Documentation
 
