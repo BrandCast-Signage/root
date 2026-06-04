@@ -5,6 +5,21 @@ All notable changes to the Root development workflow framework are documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] — 2026-06-04
+
+### Fixed
+
+- **Parallel Execution Groups no longer collide or reset the stream.** `board_start({ issue, groupId })` previously called `createStream` unconditionally and built the branch name from the issue alone — so every group asked git for the *same* branch (`feat/<issue>-<slug>`) and re-initialized the stream record back to `queued`, wiping `planPath`/`status`/approval. Two parallel groups could never both get a worktree (`fatal: A branch named … already exists`), and even one group call corrupted the stream. `board_start` now has two modes: when a stream already exists and a `groupId` is supplied, it runs in **group-worktree mode** — carving an isolated worktree on a group-suffixed branch (`<streamBranch>-<groupId>`) forked from the stream branch tip, recorded only on `stream.groups[groupId]`, leaving the stream-level `branch`/`worktreePath`/`status` untouched. Fresh-start mode is unchanged.
+
+### Added
+
+- **`board_integrate_groups({ issue })`** — merges each Execution Group's branch back into the stream branch (inside the stream worktree), then prunes the group worktrees and branches. Called by `/root:impl` after the Tier 1 workflow reports `complete` and before final validation/PR, this is what consolidates parallel group work onto the single PR branch. A merge conflict (groups that were not actually file-disjoint) halts the run with a blocker notification and leaves the conflict in the worktree for manual resolution.
+- `createWorktree` gains an optional `startPoint` argument so a group branch can fork from the stream branch tip rather than the main checkout's HEAD.
+- `deleteBranch(projectDir, branch)` helper in `worktree.ts` for post-merge branch pruning.
+- `GroupAssignment.branch` field (migrated/backfilled to `null` on older records) tracks each group's branch for integration.
+
+Bumps bundled `@brandcast_app/mcp-root-board` to `0.6.0`.
+
 ## [2.6.0] — 2026-05-17
 
 ### Added

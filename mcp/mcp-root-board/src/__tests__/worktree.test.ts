@@ -10,6 +10,7 @@ const mockExistsSync = existsSync as jest.MockedFunction<typeof existsSync>;
 
 import {
   createWorktree,
+  deleteBranch,
   detectPackageManager,
   installDependencies,
   listWorktrees,
@@ -113,6 +114,34 @@ describe("createWorktree", () => {
 
     expect(mockExecSync).toHaveBeenCalledWith(
       `git worktree add ${expectedPath} -b issue-42`,
+      { cwd: projectDir, encoding: "utf-8" }
+    );
+  });
+
+  it("forks the new branch from startPoint when provided", () => {
+    mockExecSync.mockReturnValue("" as any);
+
+    const projectDir = "/home/user/proj";
+    const result = createWorktree(projectDir, 42, "feat/42-foo-A", "A", "feat/42-foo");
+
+    const expectedPath = path.resolve(projectDir, "..", "proj-42-A");
+    expect(result).toBe(expectedPath);
+
+    expect(mockExecSync).toHaveBeenCalledWith(
+      `git worktree add ${expectedPath} -b feat/42-foo-A feat/42-foo`,
+      { cwd: projectDir, encoding: "utf-8" }
+    );
+  });
+
+  it("omits the startPoint arg when startPoint is absent or blank", () => {
+    mockExecSync.mockReturnValue("" as any);
+
+    const projectDir = "/home/user/proj";
+    createWorktree(projectDir, 42, "feat/42-foo", undefined, "   ");
+
+    const expectedPath = path.resolve(projectDir, "..", "proj-42");
+    expect(mockExecSync).toHaveBeenCalledWith(
+      `git worktree add ${expectedPath} -b feat/42-foo`,
       { cwd: projectDir, encoding: "utf-8" }
     );
   });
@@ -236,6 +265,41 @@ describe("removeWorktree", () => {
 
     expect(() => removeWorktree("/home/user/proj", "/home/user/proj-5")).toThrow(
       "permission denied"
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deleteBranch
+// ---------------------------------------------------------------------------
+
+describe("deleteBranch", () => {
+  it("force-deletes the branch with git branch -D", () => {
+    mockExecSync.mockReturnValue("" as any);
+
+    deleteBranch("/home/user/proj", "feat/42-foo-A");
+
+    expect(mockExecSync).toHaveBeenCalledWith("git branch -D feat/42-foo-A", {
+      cwd: "/home/user/proj",
+      encoding: "utf-8",
+    });
+  });
+
+  it("is a no-op when the branch does not exist", () => {
+    mockExecSync.mockImplementation(() => {
+      throw new Error("error: branch 'feat/42-foo-A' not found.");
+    });
+
+    expect(() => deleteBranch("/home/user/proj", "feat/42-foo-A")).not.toThrow();
+  });
+
+  it("re-throws unexpected errors", () => {
+    mockExecSync.mockImplementation(() => {
+      throw new Error("fatal: not a git repository");
+    });
+
+    expect(() => deleteBranch("/home/user/proj", "feat/42-foo-A")).toThrow(
+      "not a git repository"
     );
   });
 });

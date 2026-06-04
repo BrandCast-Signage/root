@@ -9,6 +9,25 @@ import { SCHEMA_VERSION, StreamState, TierSource } from "./types.js";
  * @param state - Raw object loaded from disk (may be any schema version).
  * @returns A fully-typed {@link StreamState} at the current schema version.
  */
+/**
+ * Backfill `branch: null` on any group assignment missing it.
+ *
+ * `GroupAssignment.branch` was added after the v2 schema as an additive optional
+ * (no version bump), so older records — and any group entry written before the
+ * field existed — need it defaulted to null. Mutates and returns the same map.
+ */
+function backfillGroupBranches(
+  groups: StreamState["groups"] | undefined
+): StreamState["groups"] {
+  if (!groups) return {};
+  for (const g of Object.values(groups)) {
+    if (g.branch === undefined) {
+      (g as { branch: string | null }).branch = null;
+    }
+  }
+  return groups;
+}
+
 export function migrate(state: unknown): StreamState {
   const raw = state as Record<string, unknown>;
   const version = typeof raw["schemaVersion"] === "number" ? raw["schemaVersion"] : 0;
@@ -35,7 +54,7 @@ export function migrate(state: unknown): StreamState {
         autoApprove: (raw["autoApprove"] as boolean) ?? false,
         parentIssue: (raw["parentIssue"] as number | null) ?? null,
         childIssues: (raw["childIssues"] as number[]) ?? [],
-        groups: (raw["groups"] as StreamState["groups"]) ?? {},
+        groups: backfillGroupBranches(raw["groups"] as StreamState["groups"]),
         kind: "issue",
         epicChildren: [],
         epicBranch: null,
@@ -60,6 +79,7 @@ export function migrate(state: unknown): StreamState {
       if (upgraded.kind === undefined) upgraded.kind = "issue";
       if (upgraded.epicChildren === undefined) upgraded.epicChildren = [];
       if (upgraded.epicBranch === undefined) upgraded.epicBranch = null;
+      upgraded.groups = backfillGroupBranches(upgraded.groups);
       return upgraded;
     }
 
@@ -91,6 +111,7 @@ export function migrate(state: unknown): StreamState {
       if (current.epicBranch === undefined) {
         current.epicBranch = null;
       }
+      current.groups = backfillGroupBranches(current.groups);
       return current;
     }
 
