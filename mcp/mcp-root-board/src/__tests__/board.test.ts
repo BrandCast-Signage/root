@@ -312,7 +312,7 @@ describe("migrate integration via readStream", () => {
       autoApprove: false,
       parentIssue: null,
       childIssues: [],
-      groups: { A: { harness: "claude", status: "in-progress", worktreePath: null } },
+      groups: { A: { harness: "claude", status: "in-progress", worktreePath: null, branch: null } },
       created: "2024-01-01T00:00:00.000Z",
       updated: "2024-01-02T00:00:00.000Z",
     };
@@ -320,6 +320,40 @@ describe("migrate integration via readStream", () => {
     expect(result).toBe(current); // same reference
     expect(result.status).toBe("implementing");
     expect(result.tierSource).toBe("classifier");
+  });
+
+  it("backfills group.branch to null on records written before the field existed", () => {
+    // A current-version record whose group entries predate GroupAssignment.branch.
+    const record = {
+      schemaVersion: SCHEMA_VERSION,
+      issue: { number: 9, title: "z", labels: [], state: "open" },
+      tier: "tier1",
+      tierSource: "classifier",
+      tierReason: "x",
+      status: "implementing",
+      branch: "feat/9-z",
+      worktreePath: "/tmp/wt",
+      planPath: null,
+      prdPath: null,
+      autoApprove: false,
+      parentIssue: null,
+      childIssues: [],
+      groups: {
+        A: { harness: "claude", status: "in-progress", worktreePath: "/tmp/wt-9-A" },
+        B: { harness: null, status: "pending", worktreePath: null },
+      },
+      kind: "issue",
+      epicChildren: [],
+      epicBranch: null,
+      created: "2024-01-01T00:00:00.000Z",
+      updated: "2024-01-02T00:00:00.000Z",
+    };
+
+    const result = migrate(record);
+    expect(result.groups.A.branch).toBeNull();
+    expect(result.groups.B.branch).toBeNull();
+    // Existing fields are preserved.
+    expect(result.groups.A.worktreePath).toBe("/tmp/wt-9-A");
   });
 });
 

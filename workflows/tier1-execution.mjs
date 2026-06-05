@@ -129,10 +129,14 @@ Issue: #${plan.issue}
 
 ## FIRST: get your isolated worktree (REQUIRED — do not skip)
 Call the board MCP tool \`board_start({ issue: ${plan.issue}, groupId: "${group.letter}" })\`.
-This creates/returns a uniquely-named board worktree \`<project>-${plan.issue}-${group.letter}\`
-so parallel groups never collide. \`cd\` into the returned Worktree path and do ALL work and
-ALL commits there. Report that path back as worktreePath. Do NOT create your own worktree and
-do NOT work in the main checkout.
+Because the stream already exists, this runs in group-worktree mode: it carves a uniquely-named
+board worktree \`<project>-${plan.issue}-${group.letter}\` on its OWN branch
+\`<streamBranch>-${group.letter}\` (forked from the stream branch) so parallel groups never collide
+on path OR branch. It does NOT touch the stream's plan/status. \`cd\` into the returned Worktree
+path and do ALL work and ALL commits on that group branch there. Report that path back as
+worktreePath. Do NOT create your own worktree and do NOT work in the main checkout.
+After all groups pass review, the main thread calls \`board_integrate_groups\` to merge every
+group branch back into the stream branch — so commit cleanly; your commits become the PR.
 
 ## Change Manifest entries for this group
 ${changeLines(group)}

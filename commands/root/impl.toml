@@ -307,7 +307,7 @@ From the data parsed in Steps 1 and 5, construct this object (pass it as the `Wo
 }
 ```
 
-The workflow runs one `team-implementer` agent per group **in parallel** within a batch; each agent calls `board_start({ issue, groupId })` to get its own board worktree (`<project>-<issue>-<letter>`) — this is the durable, board-tracked worktree that PR/merge/cleanup rely on, NOT an ephemeral harness worktree. Each batch is then gated by a `team-reviewer` agent in a loop-until-PASS; the workflow re-spawns the affected implementers on `ISSUES` and only advances to the next batch on `PASS`.
+The workflow runs one `team-implementer` agent per group **in parallel** within a batch; each agent calls `board_start({ issue, groupId })` to get its own board worktree (`<project>-<issue>-<letter>`) on its own branch (`<streamBranch>-<letter>`, forked from the stream branch) — durable, board-tracked, NOT an ephemeral harness worktree. Parallel groups never collide on path OR branch, and group calls never recreate or reset the stream. Each batch is then gated by a `team-reviewer` agent in a loop-until-PASS; the workflow re-spawns the affected implementers on `ISSUES` and only advances to the next batch on `PASS`.
 
 **Migration Hard Rules** (passed verbatim as `migrationRules`; the workflow injects it into implementer prompts for migration groups):
 
@@ -361,7 +361,14 @@ Review: PASS (team-reviewer)
 Progress: <completed>/<total> groups
 ```
 
-When ALL implementation groups are complete, call `board_run` with the issue number to transition the stream to `validating`. (Per-group completion is recorded in the plan file's Change Manifest by the implementers; the board status advances only when the full set is done.)
+When ALL implementation groups are complete, **first integrate the parallel group branches**: call `board_integrate_groups({ issue })`. Each group committed on its own branch in its own worktree; this merges every group branch back into the stream branch (inside the stream worktree), then prunes the group worktrees and branches. Because a well-formed plan partitions groups by disjoint files, the merges are conflict-free.
+
+- On success it reports the integrated groups and the stream worktree path — **run all subsequent steps (full validation, PR) from that stream worktree**, which now holds the consolidated work.
+- If it returns `isError` (a merge conflict), the Execution Groups were not actually independent. Do NOT advance: treat it like a `blocked` result — call `board_run` with a `blocked` signal, surface the conflict detail, and stop. The conflicting merge is left in git's conflicted state in the stream worktree for manual resolution.
+
+Then call `board_run` with the issue number to transition the stream to `validating`. (Per-group completion is recorded in the plan file's Change Manifest by the implementers; the board status advances only when the full set is integrated.)
+
+> Skip `board_integrate_groups` only if the run was never fanned out into parallel groups (single-group plan with no group branches) — the tool is a no-op in that case and reports so.
 
 **`{ status: "blocked", batchIndex, groups, reason, migrationHalt, completedBatches }`** — a group failed, the reviewer never reached PASS within its round budget, or a migration deviation forced a halt. Do NOT advance:
 

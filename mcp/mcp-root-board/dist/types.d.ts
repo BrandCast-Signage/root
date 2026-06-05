@@ -32,6 +32,17 @@ export interface GroupAssignment {
     status: GroupStatus;
     /** Absolute path to the worktree for this group, or null if not yet created. */
     worktreePath: string | null;
+    /**
+     * Git branch this group's worktree commits onto, or null if not yet created.
+     *
+     * Parallel groups MUST each have a distinct branch — git refuses to check out
+     * the same branch in two worktrees, and a shared branch would serialize their
+     * commits. The branch is the stream branch with a `-<groupId>` suffix
+     * (e.g. stream `feat/42-foo` → group A `feat/42-foo-A`), forked from the stream
+     * branch tip. {@link board_integrate_groups} merges it back into the stream
+     * branch once the group's work is reviewed.
+     */
+    branch: string | null;
 }
 /**
  * Snapshot of a GitHub issue associated with a stream.

@@ -66,16 +66,27 @@ export function installDependencies(worktreePath: string): void {
  * @param suffix - Optional disambiguator appended to the directory name as `-<suffix>`.
  *   Useful when multiple parallel worktrees are created for the same issue (e.g. group IDs
  *   "A", "B"). Empty or whitespace-only values are treated as absent.
+ * @param startPoint - Optional commit-ish to fork the new branch from (e.g. the stream
+ *   branch, so a parallel Execution Group branches off the stream tip rather than the
+ *   current HEAD of `projectDir`). When omitted, git branches from `projectDir`'s HEAD.
  * @returns Absolute path to the newly created worktree directory.
  * @throws {Error} If the `git worktree add` command fails.
  */
-export function createWorktree(projectDir: string, issue: number, branch: string, suffix?: string): string {
+export function createWorktree(
+  projectDir: string,
+  issue: number,
+  branch: string,
+  suffix?: string,
+  startPoint?: string
+): string {
   const absProjectDir = path.resolve(projectDir);
   const dirSuffix = suffix?.trim() ? `-${suffix.trim()}` : "";
   const worktreePath = path.resolve(absProjectDir, "..", path.basename(absProjectDir) + "-" + issue + dirSuffix);
 
+  const startPointArg = startPoint?.trim() ? ` ${startPoint.trim()}` : "";
+
   try {
-    execSync(`git worktree add ${worktreePath} -b ${branch}`, {
+    execSync(`git worktree add ${worktreePath} -b ${branch}${startPointArg}`, {
       cwd: absProjectDir,
       encoding: "utf-8",
     });
@@ -105,6 +116,30 @@ export function removeWorktree(projectDir: string, worktreePath: string): void {
     const stderr = err instanceof Error ? err.message : String(err);
     // If the path is not a registered worktree, treat it as a no-op.
     if (stderr.includes("is not a working tree")) {
+      return;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Delete a local git branch. Used to prune a per-group branch after its work has
+ * been merged back into the stream branch and its worktree removed.
+ *
+ * Uses `-D` (force) because the caller deletes only after a successful merge, and
+ * `-d` can spuriously refuse when git can't cheaply prove the merge from the
+ * given cwd. No-op if the branch is already gone.
+ *
+ * @param projectDir - Path to run the command from (any worktree of the repo).
+ * @param branch - Branch name to delete.
+ */
+export function deleteBranch(projectDir: string, branch: string): void {
+  try {
+    execSync(`git branch -D ${branch}`, { cwd: projectDir, encoding: "utf-8" });
+  } catch (err) {
+    const stderr = err instanceof Error ? err.message : String(err);
+    // Already deleted / never existed — treat as a no-op.
+    if (stderr.includes("not found") || stderr.includes("Cannot delete")) {
       return;
     }
     throw err;

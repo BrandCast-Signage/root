@@ -10,7 +10,7 @@ import { loadNotificationConfig, sendDiscord } from "./notify.js";
 import { loadGithubProjectConfig, setProjectStatusInProgress } from "./project.js";
 import { appendSharedContext, getSharedContext } from "./sharedContext.js";
 import { IssueContext } from "./types.js";
-import { createWorktree, removeWorktree } from "./worktree.js";
+import { createWorktree, deleteBranch, mergeWorktreeInto, removeWorktree } from "./worktree.js";
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -24,7 +24,7 @@ const rootDir = process.env["ROOT_DIR"] ?? process.cwd();
 
 const server = new McpServer({
   name: "root-board",
-  version: "0.4.0",
+  version: "0.6.0",
 });
 
 // ---------------------------------------------------------------------------
@@ -123,7 +123,7 @@ server.tool(
     parentIssue: z.number().int().positive().optional().describe("Parent issue number if this stream is a decomposed sub-issue"),
     tier: z.enum(["tier1", "tier2"]).optional().describe("Explicit tier override (e.g. from a user-supplied --tier flag). When omitted, the tier is classified from issue labels and title/body."),
     tierJustification: z.string().optional().describe("Required when `tier` is supplied. Explain why the caller is overriding the classifier (e.g. \"user passed --tier 1\", \"touches prisma/schema.prisma per database-migrations-tier1 rule\"). Rejected if blank or whitespace."),
-    groupId: z.string().optional().describe("Parallel Execution Group identifier (e.g. \"A\", \"B\"). When supplied, appended to the worktree directory name as `-<groupId>` to prevent path collisions when multiple groups run concurrently for the same issue."),
+    groupId: z.string().optional().describe("Parallel Execution Group identifier (e.g. \"A\", \"B\"). When supplied for an EXISTING stream, board_start runs in group-worktree mode: it does NOT recreate the stream, but carves an isolated worktree on a group-suffixed branch (`<streamBranch>-<groupId>`) forked from the stream branch, recorded on stream.groups[groupId]. board_integrate_groups merges these back. Ignored when no stream exists yet."),
   },
   async ({ issue, autoApprove, parentIssue, tier: tierOverride, tierJustification, groupId }) => {
     // Reject unmotivated overrides up front. Recording *why* a tier was forced
@@ -144,6 +144,81 @@ server.tool(
       }
     }
 
+    // -----------------------------------------------------------------------
+    // GROUP-WORKTREE MODE.
+    //
+    // An existing stream + a groupId means "carve me an isolated worktree for
+    // this parallel Execution Group" — NOT "start a brand-new stream". The two
+    // must not share a primitive: re-running the fresh-start path here would
+    // call createStream and wipe planPath / status / approval back to "queued",
+    // and reusing the stream branch would either collide (git refuses a second
+    // `-b` of the same name) or be rejected (git refuses to check out one branch
+    // in two worktrees). So each group gets its own branch — the stream branch
+    // with a `-<groupId>` suffix, forked from the stream branch tip — recorded
+    // ONLY on stream.groups[groupId]. The stream-level branch/worktreePath/status
+    // are left untouched. board_integrate_groups merges these back later.
+    // -----------------------------------------------------------------------
+    if (groupId !== undefined && groupId.trim().length > 0) {
+      const gid = groupId.trim();
+      const existing = readStream(rootDir, issue);
+      if (existing !== null) {
+        if (existing.branch === null || existing.branch.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `board_start: stream #${issue} has no branch yet — cannot create a group worktree. Start the stream (board_start without groupId) before fanning out Execution Groups.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const streamBranch = existing.branch;
+        const groupBranch = `${streamBranch}-${gid}`;
+
+        let worktreePath: string;
+        try {
+          worktreePath = createWorktree(rootDir, issue, groupBranch, gid, streamBranch);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `board_start: failed to create worktree for group ${gid} of #${issue}: ${msg}`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const existingGroups = existing.groups ?? {};
+        const prev =
+          existingGroups[gid] ?? { harness: null, status: "pending" as const, worktreePath: null, branch: null };
+        updateStream(rootDir, issue, {
+          groups: {
+            ...existingGroups,
+            [gid]: { ...prev, status: "in-progress", worktreePath, branch: groupBranch },
+          },
+        });
+
+        const lines = [
+          `Group ${gid} worktree ready for stream #${issue}.`,
+          `Group branch: ${groupBranch}`,
+          `Forked from:  ${streamBranch}`,
+          `Worktree:     ${worktreePath}`,
+          ``,
+          `Do ALL work and commits for group ${gid} in this worktree. board_integrate_groups`,
+          `will merge ${groupBranch} back into ${streamBranch} once the batch is reviewed.`,
+        ];
+        return { content: [{ type: "text", text: lines.join("\n") }] };
+      }
+      // No existing stream: fall through to fresh-start. The groupId is not used
+      // to suffix the primary worktree — the first real fan-out call will create
+      // group worktrees once the stream (and its branch) exist.
+    }
+
     // Fetch issue context from GitHub.
     const issueData = getIssue(issue);
     const issueContext: IssueContext = {
@@ -158,7 +233,7 @@ server.tool(
       ? { tier: tierOverride, reason: tierJustification!.trim(), source: "override" }
       : { ...classifyTier(issueData), source: "classifier" };
 
-    const stream = createStream(
+    createStream(
       issueContext,
       classification.tier,
       classification.source,
@@ -186,27 +261,16 @@ server.tool(
       updateStream(rootDir, issue, updates);
     }
 
-    // Build branch name: feat/<issue>-<slugified-title>
+    // Build branch name: feat/<issue>-<slugified-title>. This is the stream
+    // (integration) branch. Parallel Execution Groups later branch off it via
+    // the group-worktree mode above and merge back through board_integrate_groups.
     const branchName = `feat/${issue}-${slugify(issueData.title)}`;
 
-    // Create the worktree. When a groupId is provided, it is used as a suffix
-    // to disambiguate paths when multiple parallel groups run for the same issue.
-    const worktreePath = createWorktree(rootDir, issue, branchName, groupId);
+    // Create the primary stream worktree (no suffix — this is the integration
+    // checkout the orchestrator, review, and PR run against).
+    const worktreePath = createWorktree(rootDir, issue, branchName);
 
-    // Update stream with worktree path and branch.
-    // When a groupId is present, also record the path on the group assignment
-    // so the orchestrator can reference each group's worktree independently.
-    const groupUpdates: Record<string, unknown> = { worktreePath, branch: branchName };
-    if (groupId !== undefined && groupId.trim().length > 0) {
-      const trimmedGroupId = groupId.trim();
-      const existingGroups = stream.groups ?? {};
-      const existingGroup = existingGroups[trimmedGroupId] ?? { harness: null, status: "pending", worktreePath: null };
-      groupUpdates.groups = {
-        ...existingGroups,
-        [trimmedGroupId]: { ...existingGroup, worktreePath },
-      };
-    }
-    const updated = updateStream(rootDir, issue, groupUpdates);
+    const updated = updateStream(rootDir, issue, { worktreePath, branch: branchName });
 
     nonFatal("setLabel:root:planning", () => setLabel(issue, "root:planning"));
 
@@ -257,6 +321,140 @@ server.tool(
     return {
       content: [{ type: "text", text: lines.join("\n") }],
     };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tool: board_integrate_groups
+// ---------------------------------------------------------------------------
+
+server.tool(
+  "board_integrate_groups",
+  "Merge each parallel Execution Group's branch back into the stream branch and prune the group worktrees. Call once after the Tier 1 execution workflow reports `complete`, BEFORE final validation and PR — this is what consolidates the parallel group work onto the single PR branch. Merges run inside the stream worktree (where the stream branch is checked out). A well-formed plan partitions groups by disjoint files, so merges are conflict-free; a conflict means the groups were not actually independent and the run halts for human attention.",
+  {
+    issue: z.number().int().positive().describe("GitHub issue number"),
+  },
+  async ({ issue }) => {
+    const stream = readStream(rootDir, issue);
+
+    if (stream === null) {
+      return {
+        content: [{ type: "text", text: `No stream found for #${issue}` }],
+        isError: true,
+      };
+    }
+
+    const streamBranch = stream.branch;
+    const streamWorktree = stream.worktreePath;
+
+    if (streamWorktree === null) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `board_integrate_groups: stream #${issue} has no primary worktree to integrate into. Nothing to do.`,
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    // Only groups that actually produced a branch are integrable.
+    const groupEntries = Object.entries(stream.groups).filter(
+      ([, g]) => g.branch !== null && g.branch.length > 0
+    );
+
+    if (groupEntries.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `board_integrate_groups: stream #${issue} has no group branches to merge. (Either it was not fanned out into parallel groups, or they have already been integrated.)`,
+          },
+        ],
+      };
+    }
+
+    const merged: string[] = [];
+    const conflicts: Array<{ group: string; branch: string; detail: string }> = [];
+
+    // Merge in a stable order so a failed run is reproducible. Merges run inside
+    // the stream worktree, where streamBranch is already checked out — the
+    // checkout inside mergeWorktreeInto is then a no-op that confirms the branch.
+    for (const [gid, g] of groupEntries.sort(([a], [b]) => a.localeCompare(b))) {
+      const groupBranch = g.branch!;
+      const result = mergeWorktreeInto(streamWorktree, groupBranch, streamBranch);
+
+      if (!result.success) {
+        conflicts.push({ group: gid, branch: groupBranch, detail: result.conflicts ?? "(no detail)" });
+        // Stop on the first conflict — leave remaining group worktrees intact so
+        // the human can inspect and resolve. The merge that conflicted is left
+        // in git's conflicted state inside the stream worktree.
+        break;
+      }
+
+      // Merge landed — prune this group's worktree and branch, and mark complete.
+      if (g.worktreePath !== null) {
+        nonFatal(`integrate:removeWorktree:${gid}`, () => removeWorktree(rootDir, g.worktreePath!));
+      }
+      nonFatal(`integrate:deleteBranch:${gid}`, () => deleteBranch(streamWorktree, groupBranch));
+
+      const current = readStream(rootDir, issue);
+      if (current !== null) {
+        const prev = current.groups[gid];
+        if (prev !== undefined) {
+          // Null branch + worktreePath so a re-run of board_integrate_groups
+          // skips this group (it filters on branch !== null) — the branch and
+          // worktree no longer exist after pruning.
+          updateStream(rootDir, issue, {
+            groups: { ...current.groups, [gid]: { ...prev, status: "complete", worktreePath: null, branch: null } },
+          });
+        }
+      }
+      merged.push(gid);
+    }
+
+    if (conflicts.length > 0) {
+      const c = conflicts[0];
+      const notifyCfg = loadNotificationConfig(rootDir);
+      if (notifyCfg !== null) {
+        void sendDiscord(
+          "blocker",
+          {
+            title: `Group integration conflict on #${issue}`,
+            description: `Merging group ${c.group} branch \`${c.branch}\` into \`${streamBranch}\` conflicted — the Execution Groups were not actually independent. Run is paused for manual resolution.`,
+            fields: [{ name: "Merged before conflict", value: merged.length > 0 ? merged.join(", ") : "(none)" }],
+          },
+          notifyCfg
+        );
+      }
+      return {
+        content: [
+          {
+            type: "text",
+            text: [
+              `board_integrate_groups HALTED on stream #${issue}.`,
+              ``,
+              `Merged cleanly: ${merged.length > 0 ? merged.join(", ") : "(none)"}`,
+              `Conflict merging group ${c.group} (${c.branch}) into ${streamBranch}:`,
+              c.detail,
+              ``,
+              `The conflicting merge is left in git's conflicted state inside ${streamWorktree}.`,
+              `Resolve it manually (or fix the plan's group partitioning) before continuing.`,
+            ].join("\n"),
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    const lines = [
+      `Integrated ${merged.length} group${merged.length === 1 ? "" : "s"} into ${streamBranch} for stream #${issue}.`,
+      `Merged: ${merged.join(", ")}`,
+      `Stream worktree: ${streamWorktree}`,
+      `Group worktrees and branches pruned. Ready for final validation and PR.`,
+    ];
+    return { content: [{ type: "text", text: lines.join("\n") }] };
   }
 );
 

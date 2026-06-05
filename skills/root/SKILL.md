@@ -211,7 +211,7 @@ For each entry in `keywordMappings`, check if any `keywords` appear in the task 
 
 Call `board_start` MCP tool with the issue number. If `--auto` was extracted in Step 0 AND this is a fresh stream (no prior stream existed), pass `autoApprove: true` as well — this sets the stream to fully autonomous so all gates (including Tier 1 `plan_approval`) auto-advance. If a tier override was extracted in Step 3, pass `tier: "tier1"` or `tier: "tier2"` accordingly **and** pass `tierJustification` quoting the user's actual words; otherwise omit both and the MCP will classify from issue data. `board_start` rejects an override with a blank `tierJustification`.
 
-> **Warning:** `board_start` is destructive on existing streams — it calls `createStream` which overwrites. Step 0's phase-aware dispatch ensures we only reach Step 6 when no stream exists (the "no stream" branch), so this is safe in practice.
+> **Warning:** `board_start` **without a `groupId`** is destructive on existing streams — it calls `createStream` which overwrites. Step 0's phase-aware dispatch ensures we only reach Step 6 when no stream exists (the "no stream" branch), so this is safe in practice. (A `board_start` call *with* a `groupId` on an existing stream is the non-destructive group-worktree path used by the Tier 1 workflow — it never recreates the stream.)
 
 Then call `board_run` to advance the status from `queued` to `planning`.
 

@@ -11,6 +11,23 @@ const types_js_1 = require("./types.js");
  * @param state - Raw object loaded from disk (may be any schema version).
  * @returns A fully-typed {@link StreamState} at the current schema version.
  */
+/**
+ * Backfill `branch: null` on any group assignment missing it.
+ *
+ * `GroupAssignment.branch` was added after the v2 schema as an additive optional
+ * (no version bump), so older records — and any group entry written before the
+ * field existed — need it defaulted to null. Mutates and returns the same map.
+ */
+function backfillGroupBranches(groups) {
+    if (!groups)
+        return {};
+    for (const g of Object.values(groups)) {
+        if (g.branch === undefined) {
+            g.branch = null;
+        }
+    }
+    return groups;
+}
 function migrate(state) {
     const raw = state;
     const version = typeof raw["schemaVersion"] === "number" ? raw["schemaVersion"] : 0;
@@ -36,7 +53,7 @@ function migrate(state) {
                 autoApprove: raw["autoApprove"] ?? false,
                 parentIssue: raw["parentIssue"] ?? null,
                 childIssues: raw["childIssues"] ?? [],
-                groups: raw["groups"] ?? {},
+                groups: backfillGroupBranches(raw["groups"]),
                 kind: "issue",
                 epicChildren: [],
                 epicBranch: null,
@@ -66,6 +83,7 @@ function migrate(state) {
                 upgraded.epicChildren = [];
             if (upgraded.epicBranch === undefined)
                 upgraded.epicBranch = null;
+            upgraded.groups = backfillGroupBranches(upgraded.groups);
             return upgraded;
         }
         case types_js_1.SCHEMA_VERSION: {
@@ -96,6 +114,7 @@ function migrate(state) {
             if (current.epicBranch === undefined) {
                 current.epicBranch = null;
             }
+            current.groups = backfillGroupBranches(current.groups);
             return current;
         }
         default:
